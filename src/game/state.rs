@@ -6,6 +6,7 @@ pub struct GameConfig {
     pub tick_ms: u64,
     pub soft_drop_multiplier: u64,
     pub lock_delay_ms: u64,
+    pub base_drop_ms: u64,
 }
 
 impl Default for GameConfig {
@@ -14,6 +15,7 @@ impl Default for GameConfig {
             tick_ms: 16,
             soft_drop_multiplier: 10,
             lock_delay_ms: 500,
+            base_drop_ms: 1000,
         }
     }
 }
@@ -30,6 +32,9 @@ pub struct GameState {
     pub lines: u32,
     pub game_over: bool,
     pub tick_ms: u64,
+    pub soft_drop_multiplier: u64,
+    pub lock_delay_ms: u64,
+    pub base_drop_ms: u64,
     pub drop_timer_ms: u64,
     pub lock_timer_ms: u64,
     rng: SimpleRng,
@@ -56,6 +61,9 @@ impl GameState {
             lines: 0,
             game_over: false,
             tick_ms: config.tick_ms,
+            soft_drop_multiplier: config.soft_drop_multiplier,
+            lock_delay_ms: config.lock_delay_ms,
+            base_drop_ms: config.base_drop_ms,
             drop_timer_ms: 0,
             lock_timer_ms: 0,
             rng,
@@ -100,6 +108,66 @@ impl GameState {
 
     pub fn is_lock_row(&self) -> bool {
         self.active.y >= BOARD_HEIGHT as i32 - 1
+    }
+
+    pub fn drop_interval_ms(&self, soft_drop: bool) -> u64 {
+        let level_factor = self.level as u64 * 50;
+        let mut interval = self.base_drop_ms.saturating_sub(level_factor);
+        if interval < 100 {
+            interval = 100;
+        }
+        if soft_drop {
+            let adjusted = interval / self.soft_drop_multiplier.max(1);
+            return adjusted.max(1);
+        }
+        interval
+    }
+
+    pub fn tick(&mut self, elapsed_ms: u64, soft_drop: bool) {
+        if self.game_over {
+            return;
+        }
+
+        self.drop_timer_ms = self.drop_timer_ms.saturating_add(elapsed_ms);
+        let interval = self.drop_interval_ms(soft_drop);
+
+        while self.drop_timer_ms >= interval {
+            self.drop_timer_ms -= interval;
+            let _ = self.try_move(0, 1);
+        }
+
+        if self.can_move_down() {
+            self.lock_timer_ms = 0;
+        } else {
+            self.lock_timer_ms = self.lock_timer_ms.saturating_add(elapsed_ms);
+            if self.lock_timer_ms >= self.lock_delay_ms {
+                self.lock_timer_ms = 0;
+                self.drop_timer_ms = 0;
+                self.board.lock_piece(&self.active);
+                let cleared = self.board.clear_lines();
+                self.apply_line_clear(cleared);
+                self.spawn_next();
+            }
+        }
+    }
+
+    fn try_move(&mut self, dx: i32, dy: i32) -> bool {
+        let new_x = self.active.x + dx;
+        let new_y = self.active.y + dy;
+        if self
+            .board
+            .can_place(&self.active, new_x, new_y, self.active.rotation)
+        {
+            self.active.x = new_x;
+            self.active.y = new_y;
+            return true;
+        }
+        false
+    }
+
+    fn can_move_down(&self) -> bool {
+        self.board
+            .can_place(&self.active, self.active.x, self.active.y + 1, self.active.rotation)
     }
 }
 
