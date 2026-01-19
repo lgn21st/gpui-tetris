@@ -1,6 +1,6 @@
 use gpui::{
-    div, px, rgb, size, App, Application, Bounds, Context, IntoElement, Render, Window,
-    WindowBounds, WindowOptions, prelude::*,
+    actions, div, px, rgb, size, App, Application, Bounds, Context, IntoElement, KeyBinding, Menu,
+    MenuItem, Render, SystemMenuType, Window, WindowBounds, WindowOptions, prelude::*,
 };
 
 pub const WINDOW_WIDTH: f32 = 480.0;
@@ -12,6 +12,8 @@ const BOARD_ROWS: f32 = 20.0;
 const PADDING: f32 = 16.0;
 const GAP: f32 = 16.0;
 
+actions!(tetris, [Quit]);
+
 pub fn run() {
     Application::new().run(|cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
@@ -20,6 +22,17 @@ pub fn run() {
             is_resizable: false,
             ..Default::default()
         };
+
+        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+        cx.set_menus(vec![Menu {
+            name: "gpui-tetris".into(),
+            items: vec![
+                MenuItem::os_submenu("Services", SystemMenuType::Services),
+                MenuItem::separator(),
+                MenuItem::action("Quit", Quit),
+            ],
+        }]);
 
         cx.open_window(options, |_, cx| cx.new(|_| TetrisView::new()))
             .unwrap();
