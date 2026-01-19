@@ -1,4 +1,5 @@
 use crate::game::board::{Board, BOARD_HEIGHT};
+use crate::game::input::GameAction;
 use crate::game::pieces::{spawn_position, Rotation, Tetromino, TetrominoType};
 
 #[derive(Clone, Copy, Debug)]
@@ -151,6 +152,57 @@ impl GameState {
         }
     }
 
+    pub fn apply_action(&mut self, action: GameAction) {
+        if self.game_over {
+            return;
+        }
+
+        match action {
+            GameAction::MoveLeft => {
+                self.try_move(-1, 0);
+            }
+            GameAction::MoveRight => {
+                self.try_move(1, 0);
+            }
+            GameAction::SoftDrop => {
+                self.try_move(0, 1);
+            }
+            GameAction::HardDrop => {
+                while self.try_move(0, 1) {}
+                self.board.lock_piece(&self.active);
+                let cleared = self.board.clear_lines();
+                self.apply_line_clear(cleared);
+                self.spawn_next();
+                self.lock_timer_ms = 0;
+                self.drop_timer_ms = 0;
+            }
+            GameAction::RotateCw => {
+                self.try_rotate(true);
+            }
+            GameAction::RotateCcw => {
+                self.try_rotate(false);
+            }
+            GameAction::Hold | GameAction::Pause | GameAction::Restart => {}
+        }
+    }
+
+    pub fn ghost_blocks(&self) -> [(i32, i32); 4] {
+        let mut ghost_y = self.active.y;
+        while self
+            .board
+            .can_place(&self.active, self.active.x, ghost_y + 1, self.active.rotation)
+        {
+            ghost_y += 1;
+        }
+
+        let mut blocks = self.active.blocks(self.active.rotation);
+        for (x, y) in blocks.iter_mut() {
+            *x += self.active.x;
+            *y += ghost_y;
+        }
+        blocks
+    }
+
     fn try_move(&mut self, dx: i32, dy: i32) -> bool {
         let new_x = self.active.x + dx;
         let new_y = self.active.y + dy;
@@ -162,6 +214,24 @@ impl GameState {
             self.active.y = new_y;
             return true;
         }
+        false
+    }
+
+    fn try_rotate(&mut self, clockwise: bool) -> bool {
+        let next_rotation = if clockwise {
+            self.active.rotation.cw()
+        } else {
+            self.active.rotation.ccw()
+        };
+
+        if self
+            .board
+            .can_place(&self.active, self.active.x, self.active.y, next_rotation)
+        {
+            self.active.rotation = next_rotation;
+            return true;
+        }
+
         false
     }
 

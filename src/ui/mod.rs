@@ -5,6 +5,8 @@ use gpui::{
 };
 
 use gpui_tetris::game::input::GameAction;
+use gpui_tetris::game::pieces::TetrominoType;
+use gpui_tetris::game::state::{GameConfig, GameState};
 
 pub const WINDOW_WIDTH: f32 = 480.0;
 pub const WINDOW_HEIGHT: f32 = 720.0;
@@ -76,6 +78,7 @@ struct TetrisView {
     board_height: f32,
     panel_width: f32,
     last_action: Option<GameAction>,
+    state: GameState,
 }
 
 impl TetrisView {
@@ -83,18 +86,45 @@ impl TetrisView {
         let board_width = CELL_SIZE * BOARD_COLS;
         let board_height = CELL_SIZE * BOARD_ROWS;
         let panel_width = WINDOW_WIDTH - board_width - (PADDING * 2.0) - GAP;
+        let state = GameState::new(1, GameConfig::default());
 
         Self {
             board_width,
             board_height,
             panel_width,
             last_action: None,
+            state,
         }
     }
 }
 
 impl Render for TetrisView {
     fn render(&mut self, _: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let active_blocks = self.state.active.blocks(self.state.active.rotation);
+        let mut active_cells = Vec::with_capacity(4);
+        for (dx, dy) in active_blocks.iter() {
+            active_cells.push((self.state.active.x + dx, self.state.active.y + dy));
+        }
+        let ghost_cells = self.state.ghost_blocks();
+
+        let mut rows = Vec::new();
+        for y in 0..BOARD_ROWS as i32 {
+            let mut row = div().flex();
+            for x in 0..BOARD_COLS as i32 {
+                let mut cell_kind = self.state.board.cells[y as usize][x as usize].kind;
+                let mut is_ghost = false;
+                if active_cells.iter().any(|(ax, ay)| *ax == x && *ay == y) {
+                    cell_kind = Some(self.state.active.kind);
+                } else if ghost_cells.iter().any(|(gx, gy)| *gx == x && *gy == y) {
+                    cell_kind = Some(self.state.active.kind);
+                    is_ghost = true;
+                }
+
+                row = row.child(render_cell(cell_kind, is_ghost));
+            }
+            rows.push(row);
+        }
+
         div()
             .size_full()
             .bg(rgb(0x101010))
@@ -112,7 +142,8 @@ impl Render for TetrisView {
                             .h(px(self.board_height))
                             .bg(rgb(0x1c1c1c))
                             .border(px(1.0))
-                            .border_color(rgb(0x2e2e2e)),
+                            .border_color(rgb(0x2e2e2e))
+                            .child(div().flex().flex_col().children(rows)),
                     )
                     .child(
                         div()
@@ -127,6 +158,22 @@ impl Render for TetrisView {
                                 self.last_action
                                     .as_ref()
                                     .map(action_label)
+                                    .unwrap_or("None")
+                            ))
+                            .child(format!(
+                                "Hold: {}",
+                                self.state
+                                    .hold
+                                    .as_ref()
+                                    .map(piece_label)
+                                    .unwrap_or("None")
+                            ))
+                            .child(format!(
+                                "Next: {}",
+                                self.state
+                                    .next_queue
+                                    .first()
+                                    .map(piece_label)
                                     .unwrap_or("None")
                             )),
                     ),
@@ -148,6 +195,42 @@ fn action_label(action: &GameAction) -> &'static str {
     }
 }
 
+fn piece_label(kind: &TetrominoType) -> &'static str {
+    match kind {
+        TetrominoType::I => "I",
+        TetrominoType::O => "O",
+        TetrominoType::T => "T",
+        TetrominoType::S => "S",
+        TetrominoType::Z => "Z",
+        TetrominoType::J => "J",
+        TetrominoType::L => "L",
+    }
+}
+
+fn render_cell(kind: Option<TetrominoType>, ghost: bool) -> impl IntoElement {
+    let color = match kind {
+        Some(TetrominoType::I) => rgb(0x4fd1c5),
+        Some(TetrominoType::O) => rgb(0xf6e05e),
+        Some(TetrominoType::T) => rgb(0x9f7aea),
+        Some(TetrominoType::S) => rgb(0x68d391),
+        Some(TetrominoType::Z) => rgb(0xfc8181),
+        Some(TetrominoType::J) => rgb(0x63b3ed),
+        Some(TetrominoType::L) => rgb(0xf6ad55),
+        None => rgb(0x101010),
+    };
+    let fill = if ghost {
+        rgb(0x2a2a2a)
+    } else {
+        color
+    };
+
+    div()
+        .w(px(CELL_SIZE))
+        .h(px(CELL_SIZE))
+        .bg(fill)
+        .border(px(1.0))
+        .border_color(rgb(0x2a2a2a))
+}
 fn register_action<A: Action + 'static>(
     cx: &mut App,
     view: Entity<TetrisView>,
@@ -156,6 +239,7 @@ fn register_action<A: Action + 'static>(
     cx.on_action(move |_: &A, cx| {
         view.update(cx, |view, cx| {
             view.last_action = Some(action);
+            view.state.apply_action(action);
             cx.notify();
         });
     });
