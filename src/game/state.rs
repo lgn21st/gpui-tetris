@@ -239,12 +239,17 @@ impl GameState {
             self.active.rotation.ccw()
         };
 
-        if self
-            .board
-            .can_place(&self.active, self.active.x, self.active.y, next_rotation)
-        {
-            self.active.rotation = next_rotation;
-            return true;
+        let kicks = [0, -1, 1, -2, 2];
+        for dx in kicks.iter() {
+            let new_x = self.active.x + dx;
+            if self
+                .board
+                .can_place(&self.active, new_x, self.active.y, next_rotation)
+            {
+                self.active.x = new_x;
+                self.active.rotation = next_rotation;
+                return true;
+            }
         }
 
         false
