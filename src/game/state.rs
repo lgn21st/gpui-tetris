@@ -32,6 +32,7 @@ pub struct GameState {
     pub level: u32,
     pub lines: u32,
     pub game_over: bool,
+    pub paused: bool,
     pub tick_ms: u64,
     pub soft_drop_multiplier: u64,
     pub lock_delay_ms: u64,
@@ -61,6 +62,7 @@ impl GameState {
             level: 0,
             lines: 0,
             game_over: false,
+            paused: false,
             tick_ms: config.tick_ms,
             soft_drop_multiplier: config.soft_drop_multiplier,
             lock_delay_ms: config.lock_delay_ms,
@@ -125,7 +127,7 @@ impl GameState {
     }
 
     pub fn tick(&mut self, elapsed_ms: u64, soft_drop: bool) {
-        if self.game_over {
+        if self.game_over || self.paused {
             return;
         }
 
@@ -153,10 +155,6 @@ impl GameState {
     }
 
     pub fn apply_action(&mut self, action: GameAction) {
-        if self.game_over {
-            return;
-        }
-
         match action {
             GameAction::MoveLeft => {
                 self.try_move(-1, 0);
@@ -182,8 +180,25 @@ impl GameState {
             GameAction::RotateCcw => {
                 self.try_rotate(false);
             }
-            GameAction::Hold | GameAction::Pause | GameAction::Restart => {}
+            GameAction::Hold => {}
+            GameAction::Pause => {
+                self.paused = !self.paused;
+            }
+            GameAction::Restart => {
+                self.reset();
+            }
         }
+    }
+
+    pub fn reset(&mut self) {
+        let seed = self.rng.next_u32() as u64;
+        let config = GameConfig {
+            tick_ms: self.tick_ms,
+            soft_drop_multiplier: self.soft_drop_multiplier,
+            lock_delay_ms: self.lock_delay_ms,
+            base_drop_ms: self.base_drop_ms,
+        };
+        *self = GameState::new(seed, config);
     }
 
     pub fn ghost_blocks(&self) -> [(i32, i32); 4] {

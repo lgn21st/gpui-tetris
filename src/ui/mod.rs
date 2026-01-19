@@ -26,7 +26,9 @@ actions!(
         SoftDrop,
         HardDrop,
         RotateCw,
-        RotateCcw
+        RotateCcw,
+        Pause,
+        Restart
     ]
 );
 
@@ -47,6 +49,8 @@ pub fn run() {
             KeyBinding::new("down", SoftDrop, None),
             KeyBinding::new("up", RotateCw, None),
             KeyBinding::new("space", HardDrop, None),
+            KeyBinding::new("p", Pause, None),
+            KeyBinding::new("r", Restart, None),
         ]);
         cx.set_menus(vec![Menu {
             name: "gpui-tetris".into(),
@@ -67,7 +71,9 @@ pub fn run() {
         register_action::<SoftDrop>(cx, view.clone(), GameAction::SoftDrop);
         register_action::<HardDrop>(cx, view.clone(), GameAction::HardDrop);
         register_action::<RotateCw>(cx, view.clone(), GameAction::RotateCw);
-        register_action::<RotateCcw>(cx, view, GameAction::RotateCcw);
+        register_action::<RotateCcw>(cx, view.clone(), GameAction::RotateCcw);
+        register_action::<Pause>(cx, view.clone(), GameAction::Pause);
+        register_action::<Restart>(cx, view, GameAction::Restart);
 
         cx.activate(true);
     })
@@ -159,6 +165,21 @@ impl Render for TetrisView {
                                     .as_ref()
                                     .map(action_label)
                                     .unwrap_or("None")
+                            ))
+                            .child(format!("Score: {}", self.state.score))
+                            .child(format!("Level: {}", self.state.level))
+                            .child(format!("Lines: {}", self.state.lines))
+                            .child(format!(
+                                "Paused: {}",
+                                if self.state.paused { "Yes" } else { "No" }
+                            ))
+                            .child(format!(
+                                "Status: {}",
+                                if self.state.game_over {
+                                    "Game Over"
+                                } else {
+                                    "Playing"
+                                }
                             ))
                             .child(format!(
                                 "Hold: {}",

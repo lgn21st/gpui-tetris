@@ -1,0 +1,30 @@
+use gpui_tetris::game::input::GameAction;
+use gpui_tetris::game::state::{GameConfig, GameState};
+
+#[test]
+fn pause_toggles_state() {
+    let mut state = GameState::new(1, GameConfig::default());
+    assert!(!state.paused);
+    state.apply_action(GameAction::Pause);
+    assert!(state.paused);
+    state.apply_action(GameAction::Pause);
+    assert!(!state.paused);
+}
+
+#[test]
+fn restart_resets_score_and_flags() {
+    let mut state = GameState::new(2, GameConfig::default());
+    state.score = 400;
+    state.lines = 12;
+    state.level = 2;
+    state.paused = true;
+    state.game_over = true;
+
+    state.apply_action(GameAction::Restart);
+
+    assert_eq!(state.score, 0);
+    assert_eq!(state.lines, 0);
+    assert_eq!(state.level, 0);
+    assert!(!state.paused);
+    assert!(!state.game_over);
+}
