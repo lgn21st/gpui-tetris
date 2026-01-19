@@ -1,4 +1,3 @@
-mod game;
 mod ui;
 
 fn main() {
