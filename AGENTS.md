@@ -44,6 +44,10 @@ PRs should include:
 - State: immutable-ish core state in `game/`, UI reads state and dispatches actions.
 - Window: fixed-size 480x720 (10x20 board with side panel on MacBook Air M2).
 
+## Dependency Workarounds (TODO)
+- TODO: `gpui` and `zed-font-kit` are vendored under `vendor/` to align `core-graphics` 0.25 on macOS.
+- TODO: Remove vendored overrides and `[patch.crates-io]` once upstream dependency versions are fixed.
+
 ## Implementation Plan
 1) Project setup: `Cargo.toml`, minimal `main.rs`, gpui window.
 2) Core rules: board grid, tetromino definitions, rotation, collision checks.
