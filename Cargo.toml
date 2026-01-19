@@ -1,0 +1,8 @@
+[package]
+name = "gpui-tetris"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# gpui crate version may change; update as needed for your local setup.
+gpui = "0.12"
