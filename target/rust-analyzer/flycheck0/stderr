@@ -1,5 +1,0 @@
-    Updating crates.io index
-error: failed to select a version for the requirement `gpui = "^0.12"`
-candidate versions found which didn't match: 0.2.2, 0.2.1, 0.2.0
-location searched: crates.io index
-required by package `gpui-tetris v0.1.0 (/Users/daniel/workspece/learn/gpui-tetris)`
