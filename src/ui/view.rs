@@ -7,11 +7,8 @@ use gpui_tetris::game::state::{GameConfig, GameState};
 use std::time::Instant;
 
 use crate::ui::input::InputState;
-use crate::ui::render::{render_board, render_panel};
-use crate::ui::style::{
-    BASE_CELL_SIZE, BASE_GAP, BASE_PADDING, BASE_WINDOW_HEIGHT, BASE_WINDOW_WIDTH, BOARD_COLS,
-    BOARD_ROWS, MIN_SCALE,
-};
+use crate::ui::render::{RenderLayout, render_board, render_panel};
+use crate::ui::style::{BASE_WINDOW_HEIGHT, BASE_WINDOW_WIDTH, MIN_SCALE};
 use crate::ui::ui_state::UiState;
 
 mod events;
@@ -50,12 +47,7 @@ impl TetrisView {
 impl Render for TetrisView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let scale = compute_scale(window);
-        let cell_size = BASE_CELL_SIZE * scale;
-        let padding = BASE_PADDING * scale;
-        let gap = BASE_GAP * scale;
-        let board_width = cell_size * BOARD_COLS;
-        let board_height = cell_size * BOARD_ROWS;
-        let panel_width = (BASE_WINDOW_WIDTH * scale) - board_width - (padding * 2.0) - gap;
+        let layout = RenderLayout::new(scale);
         let now = Instant::now();
         let focused = self.focus_handle.is_focused(window);
         if self.was_focused && !focused {
@@ -79,6 +71,15 @@ impl Render for TetrisView {
         window.request_animation_frame();
         self.play_sound_events();
 
+        let board = {
+            let ui = &mut self.ui;
+            render_board(ui, &layout, focused)
+        };
+        let panel = {
+            let ui = &self.ui;
+            render_panel(ui, &layout)
+        };
+
         div()
             .size_full()
             .bg(rgb(0x101010))
@@ -89,29 +90,7 @@ impl Render for TetrisView {
             .on_key_down(cx.listener(Self::on_key_down))
             .on_key_up(cx.listener(Self::on_key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-            .child(
-                div()
-                    .flex()
-                    .gap_4()
-                    .p_4()
-                    .child(render_board(
-                        &self.ui,
-                        cell_size,
-                        board_width,
-                        board_height,
-                        focused,
-                        scale,
-                    ))
-                    .child(render_panel(
-                        &self.ui,
-                        cell_size,
-                        board_height,
-                        panel_width,
-                        padding,
-                        gap,
-                        scale,
-                    )),
-            )
+            .child(div().flex().gap_4().p_4().child(board).child(panel))
     }
 }
 

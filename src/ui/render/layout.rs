@@ -7,24 +7,51 @@ use crate::ui::render::{
     render_cell, render_game_over_tint, render_line_clear_flash, render_lock_bar,
     render_lock_warning, render_overlay, render_preview,
 };
-use crate::ui::style::{BASE_PANEL_TEXT, BOARD_COLS_USIZE, BOARD_ROWS_USIZE};
+use crate::ui::style::{
+    BASE_CELL_SIZE, BASE_GAP, BASE_PADDING, BASE_PANEL_TEXT, BASE_WINDOW_WIDTH, BOARD_COLS,
+    BOARD_COLS_USIZE, BOARD_ROWS, BOARD_ROWS_USIZE,
+};
 use crate::ui::ui_state::UiState;
 
+pub struct RenderLayout {
+    pub scale: f32,
+    pub cell_size: f32,
+    pub padding: f32,
+    pub gap: f32,
+    pub board_width: f32,
+    pub board_height: f32,
+    pub panel_width: f32,
+}
+
+impl RenderLayout {
+    pub fn new(scale: f32) -> Self {
+        let cell_size = BASE_CELL_SIZE * scale;
+        let padding = BASE_PADDING * scale;
+        let gap = BASE_GAP * scale;
+        let board_width = cell_size * BOARD_COLS;
+        let board_height = cell_size * BOARD_ROWS;
+        let panel_width = (BASE_WINDOW_WIDTH * scale) - board_width - (padding * 2.0) - gap;
+        Self {
+            scale,
+            cell_size,
+            padding,
+            gap,
+            board_width,
+            board_height,
+            panel_width,
+        }
+    }
+}
+
 pub fn render_board(
-    ui: &UiState,
-    cell_size: f32,
-    board_width: f32,
-    board_height: f32,
+    ui: &mut UiState,
+    layout: &RenderLayout,
     focused: bool,
-    scale: f32,
-) -> impl IntoElement {
+) -> impl IntoElement + use<> {
     let show_active = !ui.state.is_line_clear_active();
-    const BOARD_CELLS: usize = BOARD_COLS_USIZE * BOARD_ROWS_USIZE;
     let cols = BOARD_COLS_USIZE as i32;
     let rows = BOARD_ROWS_USIZE as i32;
-    let mut flash_mask = [false; BOARD_CELLS];
-    let mut active_mask = [false; BOARD_CELLS];
-    let mut ghost_mask = [false; BOARD_CELLS];
+    ui.clear_render_masks();
 
     let set_mask = |mask: &mut [bool], x: i32, y: i32| {
         if x >= 0 && x < cols && y >= 0 && y < rows {
@@ -35,20 +62,20 @@ pub fn render_board(
 
     if ui.state.landing_flash_active() {
         for (x, y) in ui.state.last_lock_cells.iter() {
-            set_mask(&mut flash_mask, *x, *y);
+            set_mask(&mut ui.flash_mask, *x, *y);
         }
     }
 
     if show_active {
         for (dx, dy) in ui.state.active.blocks(ui.state.active.rotation).iter() {
             set_mask(
-                &mut active_mask,
+                &mut ui.active_mask,
                 ui.state.active.x + dx,
                 ui.state.active.y + dy,
             );
         }
         for (x, y) in ui.state.ghost_blocks().iter() {
-            set_mask(&mut ghost_mask, *x, *y);
+            set_mask(&mut ui.ghost_mask, *x, *y);
         }
     }
 
@@ -59,23 +86,23 @@ pub fn render_board(
             let mut cell_kind = ui.state.board.cells[y as usize][x as usize].kind;
             let mut is_ghost = false;
             let idx = (y as usize * cols as usize) + x as usize;
-            let is_flash = flash_mask[idx];
+            let is_flash = ui.flash_mask[idx];
 
-            if show_active && active_mask[idx] {
+            if show_active && ui.active_mask[idx] {
                 cell_kind = Some(ui.state.active.kind);
-            } else if show_active && ghost_mask[idx] {
+            } else if show_active && ui.ghost_mask[idx] {
                 cell_kind = Some(ui.state.active.kind);
                 is_ghost = true;
             }
 
-            row = row.child(render_cell(cell_kind, is_ghost, is_flash, cell_size));
+            row = row.child(render_cell(cell_kind, is_ghost, is_flash, layout.cell_size));
         }
         rows.push(row);
     }
 
     div()
-        .w(px(board_width))
-        .h(px(board_height))
+        .w(px(layout.board_width))
+        .h(px(layout.board_height))
         .bg(theme::board_bg())
         .border(px(1.0))
         .border_color(theme::border())
@@ -92,34 +119,26 @@ pub fn render_board(
             focused,
             ui.sfx_volume_label(),
             ui.sfx_muted,
-            scale,
+            layout.scale,
         ))
 }
 
-pub fn render_panel(
-    ui: &UiState,
-    cell_size: f32,
-    board_height: f32,
-    panel_width: f32,
-    padding: f32,
-    gap: f32,
-    scale: f32,
-) -> impl IntoElement {
+pub fn render_panel(ui: &UiState, layout: &RenderLayout) -> impl IntoElement + use<> {
     div()
-        .w(px(panel_width.max(cell_size * 4.0)))
-        .h(px(board_height))
+        .w(px(layout.panel_width.max(layout.cell_size * 4.0)))
+        .h(px(layout.board_height))
         .bg(theme::panel_bg())
         .border(px(1.0))
         .border_color(theme::border())
-        .p(px(padding * 0.75))
+        .p(px(layout.padding * 0.75))
         .flex()
         .flex_col()
-        .gap(px(gap * 0.6))
-        .text_size(px(BASE_PANEL_TEXT * scale))
+        .gap(px(layout.gap * 0.6))
+        .text_size(px(BASE_PANEL_TEXT * layout.scale))
         .text_color(theme::panel_text())
         .child(
             div()
-                .text_size(px(BASE_PANEL_TEXT * scale * 0.95))
+                .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
                 .child(format!(
                     "Last input: {}",
                     ui.last_action.as_ref().map(action_label).unwrap_or("None")
@@ -129,7 +148,7 @@ pub fn render_panel(
             div()
                 .flex()
                 .flex_col()
-                .gap(px(gap * 0.2))
+                .gap(px(layout.gap * 0.2))
                 .child(format!("Score: {}", ui.state.score))
                 .child(format!("Level: {}", ui.state.level))
                 .child(format!("Lines: {}", ui.state.lines))
@@ -181,32 +200,35 @@ pub fn render_panel(
                     ui.state.lock_timer_ms,
                     ui.state.lock_delay_ms,
                     ui.state.is_grounded(),
-                    scale,
+                    layout.scale,
                 )),
         )
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap(px(gap * 0.2))
+                .gap(px(layout.gap * 0.2))
                 .child(
                     div()
-                        .text_size(px(BASE_PANEL_TEXT * scale * 0.95))
+                        .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
                         .child("Hold"),
                 )
-                .child(render_preview(ui.state.hold.as_ref(), cell_size)),
+                .child(render_preview(ui.state.hold.as_ref(), layout.cell_size)),
         )
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap(px(gap * 0.2))
+                .gap(px(layout.gap * 0.2))
                 .child(
                     div()
-                        .text_size(px(BASE_PANEL_TEXT * scale * 0.95))
+                        .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
                         .child("Next"),
                 )
-                .child(render_preview(ui.state.next_queue.first(), cell_size)),
+                .child(render_preview(
+                    ui.state.next_queue.first(),
+                    layout.cell_size,
+                )),
         )
 }
 

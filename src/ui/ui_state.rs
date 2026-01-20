@@ -2,7 +2,9 @@ use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::state::GameState;
 
-use crate::ui::style::DEFAULT_SFX_VOLUME;
+use crate::ui::style::{BOARD_COLS_USIZE, BOARD_ROWS_USIZE, DEFAULT_SFX_VOLUME};
+
+const BOARD_CELLS: usize = BOARD_COLS_USIZE * BOARD_ROWS_USIZE;
 
 pub struct UiState {
     pub last_action: Option<GameAction>,
@@ -12,6 +14,9 @@ pub struct UiState {
     pub sfx_volume: f32,
     pub sfx_muted: bool,
     pub audio: Option<AudioEngine>,
+    pub(crate) flash_mask: [bool; BOARD_CELLS],
+    pub(crate) active_mask: [bool; BOARD_CELLS],
+    pub(crate) ghost_mask: [bool; BOARD_CELLS],
 }
 
 pub const SETTINGS_SHORTCUTS: &str = "M: mute · +/-: volume · 0: reset";
@@ -32,6 +37,9 @@ impl UiState {
             sfx_volume: DEFAULT_SFX_VOLUME,
             sfx_muted: false,
             audio,
+            flash_mask: [false; BOARD_CELLS],
+            active_mask: [false; BOARD_CELLS],
+            ghost_mask: [false; BOARD_CELLS],
         };
         ui.apply_audio_volume();
         ui
@@ -131,6 +139,12 @@ impl UiState {
         } else {
             format!("{:.0}%", self.sfx_volume * 100.0)
         }
+    }
+
+    pub fn clear_render_masks(&mut self) {
+        self.flash_mask.fill(false);
+        self.active_mask.fill(false);
+        self.ghost_mask.fill(false);
     }
 }
 
