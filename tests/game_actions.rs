@@ -44,6 +44,34 @@ fn hard_drop_locks_piece() {
 }
 
 #[test]
+fn move_right_stops_at_occupied_cell() {
+    let config = GameConfig::default();
+    let mut state = GameState::new(4, config);
+    state.active = Tetromino::new(TetrominoType::O, 3, 0);
+    state.active.rotation = Rotation::North;
+    state.board.cells[0][5].filled = true;
+    state.board.cells[0][5].kind = Some(TetrominoType::I);
+
+    state.apply_action(GameAction::MoveRight);
+    assert_eq!(state.active.x, 3);
+}
+
+#[test]
+fn hard_drop_stops_above_blocker() {
+    let config = GameConfig::default();
+    let mut state = GameState::new(5, config);
+    state.active = Tetromino::new(TetrominoType::O, 3, 0);
+    state.active.rotation = Rotation::North;
+    state.board.cells[19][4].filled = true;
+    state.board.cells[19][4].kind = Some(TetrominoType::Z);
+
+    state.apply_action(GameAction::HardDrop);
+
+    assert!(state.board.cells[18][4].filled);
+    assert!(state.board.cells[19][4].filled);
+}
+
+#[test]
 fn ghost_blocks_reach_bottom() {
     let mut state = GameState::new(4, GameConfig::default());
     state.board = Board::new();
