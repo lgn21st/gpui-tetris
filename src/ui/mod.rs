@@ -1,10 +1,10 @@
 use gpui::{
-    actions, div, px, rgb, size, Action, App, Application, Bounds, Context, Entity, IntoElement,
-    KeyBinding, Menu, MenuItem, Render, SystemMenuType, Window, WindowBounds, WindowOptions,
-    prelude::*,
+    actions, div, px, rgb, size, Action, App, Application, Bounds, Context, Entity, FocusHandle,
+    IntoElement, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, Render, SystemMenuType,
+    Window, WindowBounds, WindowOptions, prelude::*,
 };
 
-use gpui_tetris::game::input::GameAction;
+use gpui_tetris::game::input::{GameAction, RepeatConfig, RepeatState};
 use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
 use std::time::Instant;
@@ -46,8 +46,6 @@ pub fn run() {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.bind_keys([
-            KeyBinding::new("left", MoveLeft, None),
-            KeyBinding::new("right", MoveRight, None),
             KeyBinding::new("down", SoftDrop, None),
             KeyBinding::new("up", RotateCw, None),
             KeyBinding::new("space", HardDrop, None),
@@ -65,7 +63,7 @@ pub fn run() {
         }]);
 
         let window = cx
-            .open_window(options, |_, cx| cx.new(|_| TetrisView::new()))
+            .open_window(options, |_, cx| cx.new(|cx| TetrisView::new(cx)))
             .unwrap();
         let view = window.update(cx, |_, _, cx| cx.entity()).unwrap();
 
@@ -79,6 +77,11 @@ pub fn run() {
         register_action::<Pause>(cx, view.clone(), GameAction::Pause);
         register_action::<Restart>(cx, view, GameAction::Restart);
 
+        window
+            .update(cx, |view, window, _| {
+                window.focus(&view.focus_handle);
+            })
+            .unwrap();
         cx.activate(true);
     })
 }
@@ -90,14 +93,20 @@ struct TetrisView {
     last_action: Option<GameAction>,
     state: GameState,
     last_tick: Option<Instant>,
+    focus_handle: FocusHandle,
+    repeat_config: RepeatConfig,
+    left_repeat: RepeatState,
+    right_repeat: RepeatState,
+    last_dir: Option<Direction>,
 }
 
 impl TetrisView {
-    fn new() -> Self {
+    fn new(cx: &mut Context<Self>) -> Self {
         let board_width = CELL_SIZE * BOARD_COLS;
         let board_height = CELL_SIZE * BOARD_ROWS;
         let panel_width = WINDOW_WIDTH - board_width - (PADDING * 2.0) - GAP;
         let state = GameState::new(1, GameConfig::default());
+        let focus_handle = cx.focus_handle();
 
         Self {
             board_width,
@@ -106,17 +115,23 @@ impl TetrisView {
             last_action: None,
             state,
             last_tick: None,
+            focus_handle,
+            repeat_config: RepeatConfig::default(),
+            left_repeat: RepeatState::new(),
+            right_repeat: RepeatState::new(),
+            last_dir: None,
         }
     }
 }
 
 impl Render for TetrisView {
-    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let now = Instant::now();
         if let Some(prev) = self.last_tick {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
             if elapsed_ms > 0 {
                 self.state.tick(elapsed_ms, false);
+                self.apply_repeats(elapsed_ms);
             }
         }
         self.last_tick = Some(now);
@@ -153,6 +168,9 @@ impl Render for TetrisView {
             .flex()
             .items_center()
             .justify_center()
+            .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(Self::on_key_down))
+            .on_key_up(cx.listener(Self::on_key_up))
             .child(
                 div()
                     .flex()
@@ -326,6 +344,73 @@ fn render_preview_cell(kind: Option<TetrominoType>) -> impl IntoElement {
         .bg(color)
         .border(px(1.0))
         .border_color(rgb(0x2a2a2a))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Direction {
+    Left,
+    Right,
+}
+
+impl TetrisView {
+    fn on_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, _cx: &mut Context<Self>) {
+        match event.keystroke.key.as_str() {
+            "left" => {
+                if self.left_repeat.press() {
+                    self.state.apply_action(GameAction::MoveLeft);
+                    self.last_action = Some(GameAction::MoveLeft);
+                }
+                self.last_dir = Some(Direction::Left);
+            }
+            "right" => {
+                if self.right_repeat.press() {
+                    self.state.apply_action(GameAction::MoveRight);
+                    self.last_action = Some(GameAction::MoveRight);
+                }
+                self.last_dir = Some(Direction::Right);
+            }
+            _ => {}
+        }
+    }
+
+    fn on_key_up(&mut self, event: &KeyUpEvent, _window: &mut Window, _cx: &mut Context<Self>) {
+        match event.keystroke.key.as_str() {
+            "left" => self.left_repeat.release(),
+            "right" => self.right_repeat.release(),
+            _ => {}
+        }
+    }
+
+    fn apply_repeats(&mut self, elapsed_ms: u64) {
+        let direction = match (self.left_repeat.is_held(), self.right_repeat.is_held()) {
+            (true, false) => Some(Direction::Left),
+            (false, true) => Some(Direction::Right),
+            (true, true) => self.last_dir,
+            _ => None,
+        };
+
+        match direction {
+            Some(Direction::Left) => {
+                let count = self.left_repeat.tick(elapsed_ms, &self.repeat_config);
+                for _ in 0..count {
+                    self.state.apply_action(GameAction::MoveLeft);
+                }
+                if count > 0 {
+                    self.last_action = Some(GameAction::MoveLeft);
+                }
+            }
+            Some(Direction::Right) => {
+                let count = self.right_repeat.tick(elapsed_ms, &self.repeat_config);
+                for _ in 0..count {
+                    self.state.apply_action(GameAction::MoveRight);
+                }
+                if count > 0 {
+                    self.last_action = Some(GameAction::MoveRight);
+                }
+            }
+            None => {}
+        }
+    }
 }
 fn render_overlay(paused: bool, game_over: bool) -> impl IntoElement {
     if !paused && !game_over {

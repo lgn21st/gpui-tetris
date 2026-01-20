@@ -2,6 +2,8 @@ use crate::game::board::{Board, BOARD_HEIGHT};
 use crate::game::input::GameAction;
 use crate::game::pieces::{spawn_position, Rotation, Tetromino, TetrominoType};
 
+const NEXT_QUEUE_SIZE: usize = 5;
+
 #[derive(Clone, Copy, Debug)]
 pub struct GameConfig {
     pub tick_ms: u64,
@@ -52,6 +54,7 @@ impl GameState {
         let mut rng = SimpleRng::new(seed);
         let mut next_queue = Vec::new();
         refill_bag(&mut rng, &mut next_queue);
+        ensure_queue(&mut rng, &mut next_queue);
 
         let first_kind = next_queue.remove(0);
         let (spawn_x, spawn_y) = spawn_position();
@@ -82,9 +85,7 @@ impl GameState {
     }
 
     pub fn spawn_next(&mut self) {
-        if self.next_queue.is_empty() {
-            refill_bag(&mut self.rng, &mut self.next_queue);
-        }
+        ensure_queue(&mut self.rng, &mut self.next_queue);
 
         let kind = self.next_queue.remove(0);
         let (spawn_x, spawn_y) = spawn_position();
@@ -169,6 +170,10 @@ impl GameState {
     }
 
     pub fn apply_action(&mut self, action: GameAction) {
+        if self.game_over && action != GameAction::Restart {
+            return;
+        }
+
         match action {
             GameAction::MoveLeft => {
                 self.try_move(-1, 0);
@@ -377,4 +382,10 @@ fn refill_bag(rng: &mut SimpleRng, queue: &mut Vec<TetrominoType>) {
     }
 
     queue.extend_from_slice(&bag);
+}
+
+fn ensure_queue(rng: &mut SimpleRng, queue: &mut Vec<TetrominoType>) {
+    while queue.len() < NEXT_QUEUE_SIZE {
+        refill_bag(rng, queue);
+    }
 }

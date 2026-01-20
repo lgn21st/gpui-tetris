@@ -40,3 +40,16 @@ fn game_over_when_spawn_blocked() {
 
     assert!(state.game_over);
 }
+
+#[test]
+fn game_over_blocks_actions_except_restart() {
+    let mut state = GameState::new(4, GameConfig::default());
+    state.game_over = true;
+    let start_x = state.active.x;
+
+    state.apply_action(GameAction::MoveLeft);
+    assert_eq!(state.active.x, start_x);
+
+    state.apply_action(GameAction::Restart);
+    assert!(!state.game_over);
+}
