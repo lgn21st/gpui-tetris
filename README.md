@@ -36,12 +36,12 @@ cargo clippy # lint
 Scores follow classic rules: 1/2/3/4 line clears award 40/100/300/1200 points, multiplied by (level + 1). Level increases every 10 lines.
 
 ## Status
-The UI renders the board with active and ghost pieces, inputs are wired, and auto-drop ticking runs each frame. Next work is richer rules (hold behavior and stronger rotation kicks) plus UX polish.
+The UI renders the board with active and ghost pieces, inputs (including hold) are wired, auto-drop ticking runs each frame, and pause/game-over overlays are shown. Next work is HUD layout polish and stronger rotation/collision refinements.
 
 ## Roadmap
-- Add hold behavior and input-driven soft drop timing.
-- Add robust rotation kicks and edge-case collision tests.
-- Implement game over flow and restart UX polish.
+- Add input-driven soft drop timing.
+- Refine rotation kicks (wall + block kicks) and collision edge-case tests.
+- Improve game over and pause UX polish.
 - Improve HUD layout (score/level/lines) and add next/hold previews.
 
 ## Dependency Notes (TODO)

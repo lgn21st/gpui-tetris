@@ -28,3 +28,15 @@ fn restart_resets_score_and_flags() {
     assert!(!state.paused);
     assert!(!state.game_over);
 }
+
+#[test]
+fn game_over_when_spawn_blocked() {
+    let mut state = GameState::new(3, GameConfig::default());
+    state.board.cells[0][4].filled = true;
+    state.board.cells[0][4].kind = Some(gpui_tetris::game::pieces::TetrominoType::I);
+    state.next_queue = vec![gpui_tetris::game::pieces::TetrominoType::O];
+
+    state.spawn_next();
+
+    assert!(state.game_over);
+}
