@@ -6,7 +6,7 @@ use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::state::{GameConfig, GameState};
 use std::time::Instant;
 
-use crate::ui::input::InputState;
+use crate::ui::input::{InputAction, InputState};
 use crate::ui::render::{RenderLayout, render_board, render_panel};
 use crate::ui::style::{BASE_WINDOW_HEIGHT, BASE_WINDOW_WIDTH, MIN_SCALE};
 use crate::ui::ui_state::UiState;
@@ -19,6 +19,7 @@ pub struct TetrisView {
     focus_handle: FocusHandle,
     input: InputState,
     was_focused: bool,
+    input_actions: Vec<InputAction>,
 }
 
 impl TetrisView {
@@ -31,6 +32,7 @@ impl TetrisView {
             focus_handle,
             input: InputState::new(),
             was_focused: true,
+            input_actions: Vec::with_capacity(16),
         };
         view
     }
@@ -93,18 +95,20 @@ impl TetrisView {
     }
 
     fn advance_frame(&mut self, now: Instant) {
-        let controller_actions = self.input.poll_controller();
-        self.apply_input_actions(controller_actions);
+        self.input.poll_controller_into(&mut self.input_actions);
+        self.apply_buffered_actions();
 
         if let Some(prev) = self.last_tick {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
             if elapsed_ms > 0 && self.ui.started && !self.ui.show_settings {
                 self.ui.state.tick(elapsed_ms, false);
                 self.ui.mark_labels_dirty();
-                let repeat_actions = self
-                    .input
-                    .apply_repeats(elapsed_ms, self.ui.can_accept_game_input());
-                self.apply_input_actions(repeat_actions);
+                self.input.apply_repeats_into(
+                    elapsed_ms,
+                    self.ui.can_accept_game_input(),
+                    &mut self.input_actions,
+                );
+                self.apply_buffered_actions();
             }
         }
         self.last_tick = Some(now);

@@ -39,14 +39,14 @@ impl TetrisView {
                     return;
                 }
                 let actions = self.input.set_keyboard_left(true);
-                self.apply_input_actions(actions);
+                self.apply_input_actions(&actions);
             }
             "right" => {
                 if !self.ui.can_accept_game_input() {
                     return;
                 }
                 let actions = self.input.set_keyboard_right(true);
-                self.apply_input_actions(actions);
+                self.apply_input_actions(&actions);
             }
             _ => {}
         }
@@ -65,11 +65,11 @@ impl TetrisView {
         match event.keystroke.key.as_str() {
             "left" => {
                 let actions = self.input.set_keyboard_left(false);
-                self.apply_input_actions(actions);
+                self.apply_input_actions(&actions);
             }
             "right" => {
                 let actions = self.input.set_keyboard_right(false);
-                self.apply_input_actions(actions);
+                self.apply_input_actions(&actions);
             }
             _ => {}
         }
@@ -84,10 +84,17 @@ impl TetrisView {
         self.focus_handle.focus(window);
     }
 
-    pub(super) fn apply_input_actions(&mut self, actions: Vec<InputAction>) {
+    pub(super) fn apply_input_actions(&mut self, actions: &[InputAction]) {
         for entry in actions {
             self.ui.apply_action(entry.action, entry.record);
         }
+    }
+
+    pub(super) fn apply_buffered_actions(&mut self) {
+        let mut actions = std::mem::take(&mut self.input_actions);
+        self.apply_input_actions(&actions);
+        actions.clear();
+        self.input_actions = actions;
     }
 
     pub(super) fn handle_focus_lost(&mut self) {

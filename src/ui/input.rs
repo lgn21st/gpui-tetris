@@ -101,11 +101,11 @@ impl InputState {
         self.clear_controller_state();
     }
 
-    pub fn poll_controller(&mut self) -> Vec<InputAction> {
+    pub fn poll_controller_into(&mut self, out: &mut Vec<InputAction>) {
+        out.clear();
         let Some(mut gilrs) = self.gilrs.take() else {
-            return Vec::new();
+            return;
         };
-        let mut actions = Vec::with_capacity(8);
         while let Some(event) = gilrs.next_event() {
             if self.gamepad_id.is_none() {
                 self.gamepad_id = Some(event.id);
@@ -128,29 +128,33 @@ impl InputState {
                     }
                 }
                 EventType::ButtonPressed(button, _) => {
-                    actions.extend(self.handle_controller_button(button, true));
+                    out.extend(self.handle_controller_button(button, true));
                 }
                 EventType::ButtonReleased(button, _) => {
-                    actions.extend(self.handle_controller_button(button, false));
+                    out.extend(self.handle_controller_button(button, false));
                 }
                 EventType::AxisChanged(axis, value, _) => {
-                    actions.extend(self.handle_controller_axis(axis, value));
+                    out.extend(self.handle_controller_axis(axis, value));
                 }
                 _ => {}
             }
         }
         self.gilrs = Some(gilrs);
-
-        actions
     }
 
-    pub fn apply_repeats(&mut self, elapsed_ms: u64, can_accept: bool) -> Vec<InputAction> {
+    pub fn apply_repeats_into(
+        &mut self,
+        elapsed_ms: u64,
+        can_accept: bool,
+        out: &mut Vec<InputAction>,
+    ) {
+        out.clear();
         if !can_accept {
             self.left_repeat.release();
             self.right_repeat.release();
             self.down_repeat.release();
             self.last_dir = None;
-            return Vec::new();
+            return;
         }
         let direction = match (self.left_repeat.is_held(), self.right_repeat.is_held()) {
             (true, false) => Some(AxisDirection::Left),
@@ -159,18 +163,17 @@ impl InputState {
             _ => None,
         };
 
-        let mut actions = Vec::new();
         match direction {
             Some(AxisDirection::Left) => {
                 let count = self.left_repeat.tick(elapsed_ms, &self.repeat_config);
                 for _ in 0..count {
-                    actions.push(InputAction::recorded(GameAction::MoveLeft));
+                    out.push(InputAction::recorded(GameAction::MoveLeft));
                 }
             }
             Some(AxisDirection::Right) => {
                 let count = self.right_repeat.tick(elapsed_ms, &self.repeat_config);
                 for _ in 0..count {
-                    actions.push(InputAction::recorded(GameAction::MoveRight));
+                    out.push(InputAction::recorded(GameAction::MoveRight));
                 }
             }
             None => {}
@@ -181,11 +184,9 @@ impl InputState {
                 .down_repeat
                 .tick(elapsed_ms, &self.soft_drop_repeat_config);
             for _ in 0..count {
-                actions.push(InputAction::recorded(GameAction::SoftDrop));
+                out.push(InputAction::recorded(GameAction::SoftDrop));
             }
         }
-
-        actions
     }
 
     fn handle_controller_button(&mut self, button: Button, pressed: bool) -> Vec<InputAction> {
@@ -323,10 +324,11 @@ mod tests {
         let mut input = InputState::new();
         let _ = input.set_keyboard_left(true);
 
-        let actions = input.apply_repeats(150, true);
+        let mut actions = Vec::new();
+        input.apply_repeats_into(150, true, &mut actions);
         assert!(actions.is_empty());
 
-        let actions = input.apply_repeats(50, true);
+        input.apply_repeats_into(50, true, &mut actions);
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].action, GameAction::MoveLeft);
     }
