@@ -63,6 +63,7 @@ PRs should include:
 - Board renders active + ghost pieces with next/hold previews.
 - Pause/game-over overlay rendered on the board.
 - Soft drop uses a short input-driven grace window.
+- Soft/hard drops award per-cell points; movement/rotation resets lock timer.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

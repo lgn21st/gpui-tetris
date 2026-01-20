@@ -177,11 +177,19 @@ impl GameState {
                 self.try_move(1, 0);
             }
             GameAction::SoftDrop => {
-                self.try_move(0, 1);
+                if self.try_move(0, 1) {
+                    self.score = self.score.saturating_add(1);
+                }
                 self.activate_soft_drop();
             }
             GameAction::HardDrop => {
-                while self.try_move(0, 1) {}
+                let mut dropped = 0;
+                while self.try_move(0, 1) {
+                    dropped += 1;
+                }
+                if dropped > 0 {
+                    self.score = self.score.saturating_add(dropped * 2);
+                }
                 self.board.lock_piece(&self.active);
                 let cleared = self.board.clear_lines();
                 self.apply_line_clear(cleared);
@@ -278,6 +286,7 @@ impl GameState {
         {
             self.active.x = new_x;
             self.active.y = new_y;
+            self.lock_timer_ms = 0;
             return true;
         }
         false
@@ -312,6 +321,7 @@ impl GameState {
                 self.active.x = new_x;
                 self.active.y = new_y;
                 self.active.rotation = next_rotation;
+                self.lock_timer_ms = 0;
                 return true;
             }
         }
