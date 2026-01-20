@@ -12,7 +12,7 @@ A desktop Tetris built in Rust with `gpui`, targeting a fixed-size window on mac
 - Down: soft drop
 - Up: rotate clockwise
 - Space: hard drop
-- (Planned) Shift/Ctrl: hold
+- C: hold
 
 ## Project Structure
 - `src/main.rs`: app entry point.
@@ -36,14 +36,13 @@ cargo clippy # lint
 Scores follow classic rules: 1/2/3/4 line clears award 40/100/300/1200 points, multiplied by (level + 1). Level increases every 10 lines.
 
 ## Status
-The rendering scaffold is in place; the next milestones are game loop timing, input mapping, and rule enforcement (movement, rotation, lock, and line clears).
+The UI renders the board with active and ghost pieces, inputs are wired, and auto-drop ticking runs each frame. Next work is richer rules (hold behavior and stronger rotation kicks) plus UX polish.
 
 ## Roadmap
-- Wire keyboard input (arrow keys + space) to `GameAction`.
-- Implement tick-based game loop with drop timer and lock delay.
-- Add piece movement, rotation with collision checks, and line clears.
-- Render active/ghost pieces and next/hold panels.
-- Add scoring/leveling UI and game over flow.
+- Add hold behavior and input-driven soft drop timing.
+- Add robust rotation kicks and edge-case collision tests.
+- Implement game over flow and restart UX polish.
+- Improve HUD layout (score/level/lines) and add next/hold previews.
 
 ## Dependency Notes (TODO)
 - TODO: This project vendors `gpui` and `zed-font-kit` under `vendor/` to resolve a `core-graphics` version mismatch on macOS.

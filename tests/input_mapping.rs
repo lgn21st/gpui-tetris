@@ -7,6 +7,7 @@ fn key_to_action_maps_supported_keys() {
     assert_eq!(key_to_action("down"), Some(GameAction::SoftDrop));
     assert_eq!(key_to_action("up"), Some(GameAction::RotateCw));
     assert_eq!(key_to_action("space"), Some(GameAction::HardDrop));
+    assert_eq!(key_to_action("c"), Some(GameAction::Hold));
 }
 
 #[test]

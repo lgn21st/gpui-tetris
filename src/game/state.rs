@@ -180,7 +180,21 @@ impl GameState {
             GameAction::RotateCcw => {
                 self.try_rotate(false);
             }
-            GameAction::Hold => {}
+            GameAction::Hold => {
+                if !self.can_hold {
+                    return;
+                }
+
+                let current_kind = self.active.kind;
+                if let Some(held_kind) = self.hold {
+                    self.hold = Some(current_kind);
+                    self.active = self.spawn_piece(held_kind);
+                } else {
+                    self.hold = Some(current_kind);
+                    self.spawn_next();
+                }
+                self.can_hold = false;
+            }
             GameAction::Pause => {
                 self.paused = !self.paused;
             }
@@ -188,6 +202,18 @@ impl GameState {
                 self.reset();
             }
         }
+    }
+
+    fn spawn_piece(&mut self, kind: TetrominoType) -> Tetromino {
+        let (spawn_x, spawn_y) = spawn_position();
+        let piece = Tetromino::new(kind, spawn_x, spawn_y);
+        if !self
+            .board
+            .can_place(&piece, piece.x, piece.y, piece.rotation)
+        {
+            self.game_over = true;
+        }
+        piece
     }
 
     pub fn reset(&mut self) {

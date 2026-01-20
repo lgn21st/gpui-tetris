@@ -18,6 +18,7 @@ pub fn key_to_action(key: &str) -> Option<GameAction> {
         "down" => Some(GameAction::SoftDrop),
         "up" => Some(GameAction::RotateCw),
         "space" => Some(GameAction::HardDrop),
+        "c" => Some(GameAction::Hold),
         _ => None,
     }
 }

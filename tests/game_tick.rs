@@ -54,3 +54,17 @@ fn tick_locks_piece_after_lock_delay() {
     assert_eq!(state.lock_timer_ms, 0);
     assert!(state.board.cells[BOARD_HEIGHT - 1][4].filled);
 }
+
+#[test]
+fn tick_does_not_advance_when_paused() {
+    let config = GameConfig {
+        base_drop_ms: 500,
+        ..GameConfig::default()
+    };
+    let mut state = GameState::new(4, config);
+    state.paused = true;
+    let start_y = state.active.y;
+
+    state.tick(1000, false);
+    assert_eq!(state.active.y, start_y);
+}

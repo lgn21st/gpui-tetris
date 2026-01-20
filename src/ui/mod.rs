@@ -7,6 +7,7 @@ use gpui::{
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::TetrominoType;
 use gpui_tetris::game::state::{GameConfig, GameState};
+use std::time::Instant;
 
 pub const WINDOW_WIDTH: f32 = 480.0;
 pub const WINDOW_HEIGHT: f32 = 720.0;
@@ -27,6 +28,7 @@ actions!(
         HardDrop,
         RotateCw,
         RotateCcw,
+        Hold,
         Pause,
         Restart
     ]
@@ -49,6 +51,7 @@ pub fn run() {
             KeyBinding::new("down", SoftDrop, None),
             KeyBinding::new("up", RotateCw, None),
             KeyBinding::new("space", HardDrop, None),
+            KeyBinding::new("c", Hold, None),
             KeyBinding::new("p", Pause, None),
             KeyBinding::new("r", Restart, None),
         ]);
@@ -72,6 +75,7 @@ pub fn run() {
         register_action::<HardDrop>(cx, view.clone(), GameAction::HardDrop);
         register_action::<RotateCw>(cx, view.clone(), GameAction::RotateCw);
         register_action::<RotateCcw>(cx, view.clone(), GameAction::RotateCcw);
+        register_action::<Hold>(cx, view.clone(), GameAction::Hold);
         register_action::<Pause>(cx, view.clone(), GameAction::Pause);
         register_action::<Restart>(cx, view, GameAction::Restart);
 
@@ -85,6 +89,7 @@ struct TetrisView {
     panel_width: f32,
     last_action: Option<GameAction>,
     state: GameState,
+    last_tick: Option<Instant>,
 }
 
 impl TetrisView {
@@ -100,12 +105,23 @@ impl TetrisView {
             panel_width,
             last_action: None,
             state,
+            last_tick: None,
         }
     }
 }
 
 impl Render for TetrisView {
-    fn render(&mut self, _: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let now = Instant::now();
+        if let Some(prev) = self.last_tick {
+            let elapsed_ms = now.duration_since(prev).as_millis() as u64;
+            if elapsed_ms > 0 {
+                self.state.tick(elapsed_ms, false);
+            }
+        }
+        self.last_tick = Some(now);
+        window.request_animation_frame();
+
         let active_blocks = self.state.active.blocks(self.state.active.rotation);
         let mut active_cells = Vec::with_capacity(4);
         for (dx, dy) in active_blocks.iter() {

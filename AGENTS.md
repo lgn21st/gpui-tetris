@@ -57,5 +57,11 @@ PRs should include:
 6) UX polish: pause, restart, game over, input remap, assets/sfx (optional).
 7) Tests: cover rule edge cases and regression scenarios.
 
+## Current Milestones
+- Inputs wired (arrows, space, `c`, `p`, `r`) with HUD status.
+- Tick logic and lock delay implemented in `GameState`, driven by per-frame updates.
+- Board renders active + ghost pieces with next/hold text.
+- Tests cover rules, tick, actions, pause/restart, and basic rotation kicks.
+
 ## Agent-Specific Instructions
 Keep this document aligned with the current gpui/Rust setup. Update commands and structure whenever new crates, scripts, or assets are added.
