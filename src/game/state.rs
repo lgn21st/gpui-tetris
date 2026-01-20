@@ -50,6 +50,7 @@ pub struct GameState {
     pub landing_flash_timer_ms: u64,
     pub last_lock_cells: [(i32, i32); 4],
     pub ghost_cache: [(i32, i32); 4],
+    pub board_revision: u64,
     sound_events: Vec<SoundEvent>,
     last_action_rotate: bool,
     rng: SimpleRng,
@@ -90,6 +91,7 @@ impl GameState {
             landing_flash_timer_ms: 0,
             last_lock_cells: [(0, 0); 4],
             ghost_cache: [(0, 0); 4],
+            board_revision: 0,
             sound_events: Vec::new(),
             last_action_rotate: false,
             rng,
@@ -186,6 +188,10 @@ impl GameState {
     pub fn reset(&mut self) {
         let seed = self.rng.next_u32() as u64;
         *self = GameState::new(seed, self.current_config());
+    }
+
+    pub fn board_revision(&self) -> u64 {
+        self.board_revision
     }
 
     pub fn activate_soft_drop(&mut self) {

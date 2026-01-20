@@ -19,8 +19,10 @@ pub struct UiState {
     pub(crate) active_mask: [bool; BOARD_CELLS],
     pub(crate) ghost_mask: [bool; BOARD_CELLS],
     pub(crate) panel_labels: PanelLabels,
-    labels_dirty: bool,
+    labels_dirty: LabelDirty,
     pub(crate) preview_cache: PreviewCache,
+    pub(crate) board_cache: [Option<TetrominoType>; BOARD_CELLS],
+    board_revision: u64,
 }
 
 #[derive(Default)]
@@ -37,6 +39,47 @@ pub struct PanelLabels {
     pub sfx: String,
     pub combo: String,
     pub b2b: String,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct LabelDirty {
+    input: bool,
+    stats: bool,
+    status: bool,
+    ruleset: bool,
+    hold: bool,
+    grounded: bool,
+    lock: bool,
+    sfx: bool,
+    combo: bool,
+}
+
+impl LabelDirty {
+    fn any(&self) -> bool {
+        self.input
+            || self.stats
+            || self.status
+            || self.ruleset
+            || self.hold
+            || self.grounded
+            || self.lock
+            || self.sfx
+            || self.combo
+    }
+
+    fn mark_game_dirty(&mut self) {
+        self.stats = true;
+        self.status = true;
+        self.ruleset = true;
+        self.hold = true;
+        self.grounded = true;
+        self.lock = true;
+        self.combo = true;
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
 }
 
 pub const SETTINGS_SHORTCUTS: &str = "M: mute · +/-: volume · 0: reset";
@@ -63,8 +106,16 @@ impl UiState {
             active_mask: [false; BOARD_CELLS],
             ghost_mask: [false; BOARD_CELLS],
             panel_labels: PanelLabels::default(),
-            labels_dirty: true,
+            labels_dirty: {
+                let mut dirty = LabelDirty::default();
+                dirty.input = true;
+                dirty.sfx = true;
+                dirty.mark_game_dirty();
+                dirty
+            },
             preview_cache: PreviewCache::new(),
+            board_cache: [None; BOARD_CELLS],
+            board_revision: 0,
         };
         ui.apply_audio_volume();
         ui.sync_panel_labels();
@@ -78,16 +129,15 @@ impl UiState {
     pub fn apply_action(&mut self, action: GameAction, record: bool) {
         if record {
             self.last_action = Some(action);
+            self.labels_dirty.input = true;
         }
         if !self.started {
             if matches!(action, GameAction::Restart | GameAction::HardDrop) {
                 self.start_game();
             }
-            self.mark_labels_dirty();
             return;
         }
         if self.show_settings {
-            self.mark_labels_dirty();
             return;
         }
 
@@ -95,7 +145,7 @@ impl UiState {
         if action == GameAction::Restart {
             self.started = true;
         }
-        self.mark_labels_dirty();
+        self.labels_dirty.mark_game_dirty();
     }
 
     pub fn start_game(&mut self) {
@@ -103,7 +153,7 @@ impl UiState {
         self.show_settings = false;
         self.state.reset();
         self.state.paused = false;
-        self.mark_labels_dirty();
+        self.labels_dirty.mark_game_dirty();
     }
 
     pub fn toggle_settings(&mut self) {
@@ -111,20 +161,20 @@ impl UiState {
         if self.show_settings && !self.state.game_over {
             self.state.paused = true;
         }
-        self.mark_labels_dirty();
+        self.labels_dirty.mark_game_dirty();
     }
 
     pub fn close_settings(&mut self) {
         if self.show_settings {
             self.show_settings = false;
-            self.mark_labels_dirty();
+            self.labels_dirty.mark_game_dirty();
         }
     }
 
     pub fn toggle_mute(&mut self) {
         self.sfx_muted = !self.sfx_muted;
         self.apply_audio_volume();
-        self.mark_labels_dirty();
+        self.labels_dirty.sfx = true;
     }
 
     pub fn adjust_volume(&mut self, delta: f32) {
@@ -133,14 +183,14 @@ impl UiState {
         }
         self.sfx_volume = (self.sfx_volume + delta).clamp(0.0, 1.0);
         self.apply_audio_volume();
-        self.mark_labels_dirty();
+        self.labels_dirty.sfx = true;
     }
 
     pub fn reset_settings(&mut self) {
         self.sfx_muted = false;
         self.sfx_volume = DEFAULT_SFX_VOLUME;
         self.apply_audio_volume();
-        self.mark_labels_dirty();
+        self.labels_dirty.sfx = true;
     }
 
     pub fn apply_audio_volume(&mut self) {
@@ -198,22 +248,36 @@ impl UiState {
     }
 
     pub fn sync_panel_labels(&mut self) {
-        if !self.labels_dirty {
+        if !self.labels_dirty.any() {
             return;
         }
         self.update_panel_labels();
-        self.labels_dirty = false;
+        self.labels_dirty.clear();
     }
 
-    pub fn mark_labels_dirty(&mut self) {
-        self.labels_dirty = true;
+    pub fn mark_game_dirty(&mut self) {
+        self.labels_dirty.mark_game_dirty();
     }
 
     pub fn pause_from_focus_loss(&mut self) {
         if self.started && !self.state.game_over {
             self.state.paused = true;
-            self.mark_labels_dirty();
+            self.labels_dirty.mark_game_dirty();
         }
+    }
+
+    pub fn sync_board_cache(&mut self) {
+        let revision = self.state.board_revision();
+        if self.board_revision == revision {
+            return;
+        }
+        for (y, row) in self.state.board.cells.iter().enumerate() {
+            for (x, cell) in row.iter().enumerate() {
+                let idx = y * BOARD_COLS_USIZE + x;
+                self.board_cache[idx] = if cell.filled { cell.kind } else { None };
+            }
+        }
+        self.board_revision = revision;
     }
 
     fn update_panel_labels(&mut self) {
@@ -222,42 +286,60 @@ impl UiState {
             .as_ref()
             .map(action_label)
             .unwrap_or("None");
-        self.panel_labels.last_input = format!("Last input: {}", last_input);
-        self.panel_labels.score = format!("Score: {}", self.state.score);
-        self.panel_labels.level = format!("Level: {}", self.state.level);
-        self.panel_labels.lines = format!("Lines: {}", self.state.lines);
-        self.panel_labels.status = format!("Status: {}", self.status_label());
-        self.panel_labels.ruleset = format!("Rules: {}", self.ruleset_label());
-        self.panel_labels.hold = format!(
-            "Hold: {}",
-            if self.state.can_hold { "Ready" } else { "Used" }
-        );
-        self.panel_labels.grounded = format!(
-            "Grounded: {}",
-            if self.state.is_grounded() {
-                "Yes"
-            } else {
-                "No"
-            }
-        );
-        self.panel_labels.lock_resets = format!(
-            "Lock resets: {}/{}",
-            self.state.lock_reset_remaining(),
-            self.state.lock_reset_limit
-        );
-        self.panel_labels.sfx = format!("SFX: {}", self.sfx_volume_label());
-        self.panel_labels.combo = format!(
-            "Combo: {}",
-            if self.state.combo >= 0 {
-                self.state.combo.to_string()
-            } else {
-                "-".to_string()
-            }
-        );
-        self.panel_labels.b2b = format!(
-            "B2B: {}",
-            if self.state.back_to_back { "Yes" } else { "No" }
-        );
+        if self.labels_dirty.input {
+            self.panel_labels.last_input = format!("Last input: {}", last_input);
+        }
+        if self.labels_dirty.stats {
+            self.panel_labels.score = format!("Score: {}", self.state.score);
+            self.panel_labels.level = format!("Level: {}", self.state.level);
+            self.panel_labels.lines = format!("Lines: {}", self.state.lines);
+        }
+        if self.labels_dirty.status {
+            self.panel_labels.status = format!("Status: {}", self.status_label());
+        }
+        if self.labels_dirty.ruleset {
+            self.panel_labels.ruleset = format!("Rules: {}", self.ruleset_label());
+        }
+        if self.labels_dirty.hold {
+            self.panel_labels.hold = format!(
+                "Hold: {}",
+                if self.state.can_hold { "Ready" } else { "Used" }
+            );
+        }
+        if self.labels_dirty.grounded {
+            self.panel_labels.grounded = format!(
+                "Grounded: {}",
+                if self.state.is_grounded() {
+                    "Yes"
+                } else {
+                    "No"
+                }
+            );
+        }
+        if self.labels_dirty.lock {
+            self.panel_labels.lock_resets = format!(
+                "Lock resets: {}/{}",
+                self.state.lock_reset_remaining(),
+                self.state.lock_reset_limit
+            );
+        }
+        if self.labels_dirty.sfx {
+            self.panel_labels.sfx = format!("SFX: {}", self.sfx_volume_label());
+        }
+        if self.labels_dirty.combo {
+            self.panel_labels.combo = format!(
+                "Combo: {}",
+                if self.state.combo >= 0 {
+                    self.state.combo.to_string()
+                } else {
+                    "-".to_string()
+                }
+            );
+            self.panel_labels.b2b = format!(
+                "B2B: {}",
+                if self.state.back_to_back { "Yes" } else { "No" }
+            );
+        }
     }
 }
 
@@ -352,6 +434,7 @@ mod tests {
 
         assert_eq!(ui.sfx_volume_label(), "70%");
         ui.toggle_mute();
+        ui.sync_panel_labels();
         assert_eq!(ui.sfx_volume_label(), "Muted");
     }
 

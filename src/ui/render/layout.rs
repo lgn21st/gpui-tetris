@@ -46,6 +46,7 @@ pub fn render_board(
     layout: &RenderLayout,
     focused: bool,
 ) -> impl IntoElement + use<> {
+    ui.sync_board_cache();
     let show_active = !ui.state.is_line_clear_active();
     let cols = BOARD_COLS_USIZE as i32;
     let rows = BOARD_ROWS_USIZE as i32;
@@ -81,9 +82,9 @@ pub fn render_board(
     for y in 0..BOARD_ROWS_USIZE as i32 {
         let mut row = div().flex();
         for x in 0..BOARD_COLS_USIZE as i32 {
-            let mut cell_kind = ui.state.board.cells[y as usize][x as usize].kind;
-            let mut is_ghost = false;
             let idx = (y as usize * cols as usize) + x as usize;
+            let mut cell_kind = ui.board_cache[idx];
+            let mut is_ghost = false;
             let is_flash = ui.flash_mask[idx];
 
             if show_active && ui.active_mask[idx] {

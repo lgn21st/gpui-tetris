@@ -182,6 +182,7 @@ pub(super) fn lock_active_piece(state: &mut GameState) {
     set_landing_flash(state);
     state.board.lock_piece(&state.active);
     let cleared = state.board.clear_lines();
+    state.board_revision = state.board_revision.wrapping_add(1);
     state.apply_line_clear(cleared, t_spin);
     state.spawn_next();
     state.last_action_rotate = false;

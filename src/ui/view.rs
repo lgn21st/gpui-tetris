@@ -102,7 +102,7 @@ impl TetrisView {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
             if elapsed_ms > 0 && self.ui.started && !self.ui.show_settings {
                 self.ui.state.tick(elapsed_ms, false);
-                self.ui.mark_labels_dirty();
+                self.ui.mark_game_dirty();
                 self.input.apply_repeats_into(
                     elapsed_ms,
                     self.ui.can_accept_game_input(),
