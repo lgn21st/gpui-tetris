@@ -76,6 +76,7 @@ PRs should include:
 - Sound events are emitted for moves, drops, line clears, holds, and game over and played if WAVs are present under `assets/sfx/` with per-event gain and soft clipping.
 - HUD shows hold availability plus grounded/lock-reset remaining status.
 - Combos, back-to-back bonuses, and basic T-spin scoring are enabled.
+- Rotation uses SRS kick tables for I/J/L/S/T/Z.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

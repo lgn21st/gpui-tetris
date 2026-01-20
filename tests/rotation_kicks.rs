@@ -60,10 +60,10 @@ fn rotate_fails_when_all_kicks_blocked() {
 fn rotate_kicks_up_from_floor() {
     let mut state = GameState::new(5, GameConfig::default());
     state.board = Board::new();
-    state.active = Tetromino::new(TetrominoType::I, 3, 18);
+    state.active = Tetromino::new(TetrominoType::I, 3, 17);
     state.active.rotation = Rotation::North;
 
     state.apply_action(GameAction::RotateCw);
     assert_eq!(state.active.rotation, Rotation::East);
-    assert!(state.active.y < 18);
+    assert!(state.active.y < 17);
 }
