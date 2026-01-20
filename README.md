@@ -42,6 +42,19 @@ cargo fmt    # format code
 cargo clippy # lint
 ```
 
+## macOS Packaging & Icon
+This project is configured to include the app icon when bundling on macOS. The icon file is:
+
+- `assets/icon.icns`
+
+The bundling metadata is set in `Cargo.toml` under `[package.metadata.bundle]`.
+
+To produce a macOS `.app` bundle, use `cargo-bundle`:
+```bash
+cargo install cargo-bundle
+cargo bundle --release
+```
+
 ## Scoring (Classic)
 Scores follow classic rules: 1/2/3/4 line clears award 40/100/300/1200 points, multiplied by (level + 1). Level increases every 10 lines. Soft drop awards 1 point per cell, hard drop awards 2 points per cell.
 

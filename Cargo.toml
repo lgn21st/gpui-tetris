@@ -11,6 +11,11 @@ crossbeam-channel = "0.5"
 hound = "3.5"
 anyhow = "1.0"
 
+[package.metadata.bundle]
+name = "gpui-tetris"
+identifier = "com.lyuguoning.com.gpui-tetris"
+icon = ["assets/icon.icns"]
+
 [patch.crates-io]
 zed-font-kit = { path = "vendor/zed-font-kit" }
 gpui = { path = "vendor/gpui" }
