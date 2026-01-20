@@ -14,6 +14,14 @@ pub struct UiState {
     pub audio: Option<AudioEngine>,
 }
 
+pub const SETTINGS_SHORTCUTS: &str = "M: mute · +/-: volume · 0: reset";
+pub const SETTINGS_BACK: &str = "S or Esc: back";
+pub const TITLE_HINT: &str = "Press Enter or Space to Start";
+pub const TITLE_SETTINGS: &str = "S: Settings";
+pub const FOCUS_HINT: &str = "Click to Focus";
+pub const PAUSED_HINT: &str = "Press P to resume";
+pub const GAME_OVER_HINT: &str = "Press R to restart";
+
 impl UiState {
     pub fn new(state: GameState, audio: Option<AudioEngine>) -> Self {
         let mut ui = Self {

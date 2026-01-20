@@ -96,6 +96,7 @@ pub(super) fn spawn_piece(state: &mut GameState, kind: TetrominoType) -> Tetromi
         state.game_over = true;
         state.sound_events.push(SoundEvent::GameOver);
     }
+    update_ghost_cache(state);
     piece
 }
 
@@ -105,22 +106,7 @@ pub(super) fn activate_soft_drop(state: &mut GameState) {
 }
 
 pub(super) fn ghost_blocks(state: &GameState) -> [(i32, i32); 4] {
-    let mut ghost_y = state.active.y;
-    while state.board.can_place(
-        &state.active,
-        state.active.x,
-        ghost_y + 1,
-        state.active.rotation,
-    ) {
-        ghost_y += 1;
-    }
-
-    let mut blocks = state.active.blocks(state.active.rotation);
-    for (x, y) in blocks.iter_mut() {
-        *x += state.active.x;
-        *y += ghost_y;
-    }
-    blocks
+    state.ghost_cache
 }
 
 pub(super) fn try_move(state: &mut GameState, dx: i32, dy: i32) -> bool {
@@ -132,6 +118,7 @@ pub(super) fn try_move(state: &mut GameState, dx: i32, dy: i32) -> bool {
     {
         state.active.x = new_x;
         state.active.y = new_y;
+        update_ghost_cache(state);
         handle_lock_reset(state);
         return true;
     }
@@ -155,6 +142,7 @@ pub(super) fn try_rotate(state: &mut GameState, clockwise: bool) -> bool {
             state.active.x = new_x;
             state.active.y = new_y;
             state.active.rotation = next_rotation;
+            update_ghost_cache(state);
             handle_lock_reset(state);
             return true;
         }
@@ -205,4 +193,23 @@ pub(super) fn set_landing_flash(state: &mut GameState) {
         state.last_lock_cells[index] = (state.active.x + dx, state.active.y + dy);
     }
     state.landing_flash_timer_ms = 120;
+}
+
+pub(super) fn update_ghost_cache(state: &mut GameState) {
+    let mut ghost_y = state.active.y;
+    while state.board.can_place(
+        &state.active,
+        state.active.x,
+        ghost_y + 1,
+        state.active.rotation,
+    ) {
+        ghost_y += 1;
+    }
+
+    let mut blocks = state.active.blocks(state.active.rotation);
+    for (x, y) in blocks.iter_mut() {
+        *x += state.active.x;
+        *y += ghost_y;
+    }
+    state.ghost_cache = blocks;
 }

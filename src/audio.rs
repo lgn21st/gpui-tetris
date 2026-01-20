@@ -373,32 +373,60 @@ fn load_wav(path: &Path) -> anyhow::Result<SoundAsset> {
 }
 
 pub fn sound_event_to_asset(event: &SoundEvent) -> Option<&'static str> {
-    match event {
-        SoundEvent::Move => Some("move"),
-        SoundEvent::Rotate => Some("rotate"),
-        SoundEvent::SoftDrop => Some("soft_drop"),
-        SoundEvent::HardDrop => Some("hard_drop"),
-        SoundEvent::Hold => Some("hold"),
-        SoundEvent::LineClear(1) => Some("line_clear_1"),
-        SoundEvent::LineClear(2) => Some("line_clear_2"),
-        SoundEvent::LineClear(3) => Some("line_clear_3"),
-        SoundEvent::LineClear(_) => Some("line_clear_4"),
-        SoundEvent::GameOver => Some("game_over"),
-    }
+    Some(sound_spec(event).key)
 }
 
 pub fn sound_event_gain(event: &SoundEvent) -> f32 {
+    sound_spec(event).gain
+}
+
+struct SoundSpec {
+    key: &'static str,
+    gain: f32,
+}
+
+fn sound_spec(event: &SoundEvent) -> SoundSpec {
     match event {
-        SoundEvent::Move => 0.25,
-        SoundEvent::Rotate => 0.35,
-        SoundEvent::SoftDrop => 0.2,
-        SoundEvent::HardDrop => 0.6,
-        SoundEvent::Hold => 0.5,
-        SoundEvent::LineClear(1) => 0.6,
-        SoundEvent::LineClear(2) => 0.7,
-        SoundEvent::LineClear(3) => 0.8,
-        SoundEvent::LineClear(_) => 0.9,
-        SoundEvent::GameOver => 0.8,
+        SoundEvent::Move => SoundSpec {
+            key: "move",
+            gain: 0.25,
+        },
+        SoundEvent::Rotate => SoundSpec {
+            key: "rotate",
+            gain: 0.35,
+        },
+        SoundEvent::SoftDrop => SoundSpec {
+            key: "soft_drop",
+            gain: 0.2,
+        },
+        SoundEvent::HardDrop => SoundSpec {
+            key: "hard_drop",
+            gain: 0.6,
+        },
+        SoundEvent::Hold => SoundSpec {
+            key: "hold",
+            gain: 0.5,
+        },
+        SoundEvent::LineClear(1) => SoundSpec {
+            key: "line_clear_1",
+            gain: 0.6,
+        },
+        SoundEvent::LineClear(2) => SoundSpec {
+            key: "line_clear_2",
+            gain: 0.7,
+        },
+        SoundEvent::LineClear(3) => SoundSpec {
+            key: "line_clear_3",
+            gain: 0.8,
+        },
+        SoundEvent::LineClear(_) => SoundSpec {
+            key: "line_clear_4",
+            gain: 0.9,
+        },
+        SoundEvent::GameOver => SoundSpec {
+            key: "game_over",
+            gain: 0.8,
+        },
     }
 }
 

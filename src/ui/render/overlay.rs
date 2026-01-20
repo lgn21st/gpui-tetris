@@ -2,6 +2,10 @@ use gpui::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::style::{BASE_HINT_TEXT, BASE_TITLE_TEXT};
+use crate::ui::ui_state::{
+    FOCUS_HINT, GAME_OVER_HINT, PAUSED_HINT, SETTINGS_BACK, SETTINGS_SHORTCUTS, TITLE_HINT,
+    TITLE_SETTINGS,
+};
 
 pub fn render_overlay(
     started: bool,
@@ -37,12 +41,8 @@ pub fn render_overlay(
                 sfx_label,
                 if muted { " (M)" } else { "" }
             )))
-            .child(
-                div()
-                    .text_size(px(hint_size))
-                    .child("M: mute · +/-: volume · 0: reset"),
-            )
-            .child(div().text_size(px(hint_size)).child("S or Esc: back"));
+            .child(div().text_size(px(hint_size)).child(SETTINGS_SHORTCUTS))
+            .child(div().text_size(px(hint_size)).child(SETTINGS_BACK));
     }
 
     if !started {
@@ -62,12 +62,8 @@ pub fn render_overlay(
             .text_color(theme::overlay_text())
             .text_size(px(title_size))
             .child("gpui‑tetris")
-            .child(
-                div()
-                    .text_size(px(hint_size))
-                    .child("Press Enter or Space to Start"),
-            )
-            .child(div().text_size(px(hint_size)).child("S: Settings"));
+            .child(div().text_size(px(hint_size)).child(TITLE_HINT))
+            .child(div().text_size(px(hint_size)).child(TITLE_SETTINGS));
     }
 
     if !paused && !game_over {
@@ -89,14 +85,14 @@ pub fn render_overlay(
             .items_center()
             .text_color(theme::overlay_text())
             .text_size(px(title_size))
-            .child("Click to Focus");
+            .child(FOCUS_HINT);
     }
 
     let label = if game_over { "Game Over" } else { "Paused" };
     let hint = if game_over {
-        "Press R to restart"
+        GAME_OVER_HINT
     } else {
-        "Press P to resume"
+        PAUSED_HINT
     };
 
     div()

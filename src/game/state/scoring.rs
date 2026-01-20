@@ -7,39 +7,39 @@ pub(super) fn apply_line_clear(state: &mut GameState, cleared: usize, t_spin: TS
     let level = state.level + 1;
     let mut points = if state.ruleset == Ruleset::Classic {
         match cleared {
-            1 => 40,
-            2 => 100,
-            3 => 300,
-            4 => 1200,
+            1 => state.rules.classic_line_scores[0],
+            2 => state.rules.classic_line_scores[1],
+            3 => state.rules.classic_line_scores[2],
+            4 => state.rules.classic_line_scores[3],
             _ => 0,
         }
     } else {
         match t_spin {
             TSpinKind::Full => match cleared {
-                0 => 400,
-                1 => 800,
-                2 => 1200,
-                3 => 1600,
+                0 => state.rules.t_spin_full[0],
+                1 => state.rules.t_spin_full[1],
+                2 => state.rules.t_spin_full[2],
+                3 => state.rules.t_spin_full[3],
                 _ => 0,
             },
             TSpinKind::Mini => match cleared {
-                0 => 100,
-                1 => 200,
-                2 => 400,
+                0 => state.rules.t_spin_mini[0],
+                1 => state.rules.t_spin_mini[1],
+                2 => state.rules.t_spin_mini[2],
                 _ => 0,
             },
             TSpinKind::None => match cleared {
-                1 => 40,
-                2 => 100,
-                3 => 300,
-                4 => 1200,
+                1 => state.rules.classic_line_scores[0],
+                2 => state.rules.classic_line_scores[1],
+                3 => state.rules.classic_line_scores[2],
+                4 => state.rules.classic_line_scores[3],
                 _ => 0,
             },
         }
     };
 
     if state.ruleset == Ruleset::Modern && qualifies_b2b && state.back_to_back {
-        points = points * 3 / 2;
+        points = points * state.rules.b2b_bonus_num / state.rules.b2b_bonus_den;
     }
 
     if cleared > 0 {
@@ -51,7 +51,7 @@ pub(super) fn apply_line_clear(state: &mut GameState, cleared: usize, t_spin: TS
         if state.ruleset == Ruleset::Modern {
             state.combo += 1;
             if state.combo > 0 {
-                points += 50 * state.combo as u32;
+                points += state.rules.combo_base * state.combo as u32;
             }
             state.back_to_back = qualifies_b2b;
         } else {

@@ -15,7 +15,7 @@ use actions::{
 use rng::{SimpleRng, ensure_queue, refill_bag};
 use scoring::apply_line_clear;
 use timing::{drop_interval_ms, tick};
-pub use types::{GameConfig, Ruleset, SoundEvent, TSpinKind};
+pub use types::{GameConfig, RulesConfig, Ruleset, SoundEvent, TSpinKind};
 
 const NEXT_QUEUE_SIZE: usize = 5;
 
@@ -32,6 +32,7 @@ pub struct GameState {
     pub combo: i32,
     pub back_to_back: bool,
     pub ruleset: Ruleset,
+    pub rules: types::RulesConfig,
     pub game_over: bool,
     pub paused: bool,
     pub tick_ms: u64,
@@ -48,6 +49,7 @@ pub struct GameState {
     pub line_clear_timer_ms: u64,
     pub landing_flash_timer_ms: u64,
     pub last_lock_cells: [(i32, i32); 4],
+    pub ghost_cache: [(i32, i32); 4],
     sound_events: Vec<SoundEvent>,
     last_action_rotate: bool,
     rng: SimpleRng,
@@ -58,8 +60,7 @@ impl GameState {
         let mut rng = SimpleRng::new(seed);
         let mut next_queue = init_next_queue(&mut rng);
         let active = spawn_first_piece(&mut next_queue);
-
-        Self {
+        let mut state = Self {
             board: Board::new(),
             active,
             hold: None,
@@ -71,6 +72,7 @@ impl GameState {
             combo: -1,
             back_to_back: false,
             ruleset: config.ruleset,
+            rules: config.rules,
             game_over: false,
             paused: false,
             tick_ms: config.tick_ms,
@@ -87,10 +89,13 @@ impl GameState {
             line_clear_timer_ms: 0,
             landing_flash_timer_ms: 0,
             last_lock_cells: [(0, 0); 4],
+            ghost_cache: [(0, 0); 4],
             sound_events: Vec::new(),
             last_action_rotate: false,
             rng,
-        }
+        };
+        actions::update_ghost_cache(&mut state);
+        state
     }
 
     pub fn spawn_next(&mut self) {
@@ -103,6 +108,7 @@ impl GameState {
         self.can_hold = true;
         self.lock_reset_count = 0;
         self.last_action_rotate = false;
+        actions::update_ghost_cache(self);
 
         if !self.board.can_place(
             &self.active,
@@ -199,6 +205,7 @@ impl GameState {
             base_drop_ms: self.base_drop_ms,
             soft_drop_grace_ms: self.soft_drop_grace_ms,
             ruleset: self.ruleset,
+            rules: self.rules,
         }
     }
 
