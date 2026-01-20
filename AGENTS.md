@@ -67,6 +67,7 @@ PRs should include:
 
 ## Current Milestones
 - Inputs wired (arrows, space, `c`, `p`, `r`) with HUD status.
+- Xbox controller input mapped via `gilrs`.
 - Tick logic and lock delay implemented in `GameState`, driven by per-frame updates.
 - Board renders active + ghost pieces with next/hold previews.
 - Pause/game-over overlay rendered on the board.
@@ -87,6 +88,7 @@ PRs should include:
 - Rotation uses SRS kick tables for I/J/L/S/T/Z.
 - Title/settings overlays are shown; focus loss auto-pauses; in-game settings expose SFX volume/mute/reset.
 - Fullscreen toggle (Cmd+Ctrl+F) is available.
+- UI caches panel labels, preview masks, and board cells to reduce per-frame work.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

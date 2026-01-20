@@ -6,6 +6,7 @@ A desktop Tetris built in Rust with `gpui`, targeting macOS (MacBook Air M2 test
 - Resizable window with proportional scaling (base 480x720).
 - Classic Tetris rules and scoring.
 - Keyboard controls (arrow keys + space).
+- Xbox controller input on macOS (via Bluetooth).
 - Title, settings, pause, and game-over overlays.
 - Fullscreen toggle (Cmd+Ctrl+F).
 - Optional stereo SFX playback via `assets/sfx/*.wav`.
@@ -43,7 +44,7 @@ Default mapping:
 - `assets/` and `docs/`: optional resources and notes.
 
 ## Development
-Requirements: Rust 2021 edition and `gpui = "0.2.2"` (vendored locally via `[patch.crates-io]`).
+Requirements: Rust 2024 edition and `gpui = "0.2.2"` (vendored locally via `[patch.crates-io]`).
 
 Common commands:
 ```bash
