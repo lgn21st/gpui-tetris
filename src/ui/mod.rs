@@ -8,7 +8,7 @@ use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::{GameAction, RepeatConfig, RepeatState};
 use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 pub const WINDOW_WIDTH: f32 = 480.0;
@@ -58,7 +58,8 @@ pub fn run() {
             )),
             ..Default::default()
         };
-        let audio_engine = match AudioEngine::new(Path::new("assets/sfx")) {
+        let asset_dir = resolve_sfx_dir(cx);
+        let audio_engine = match AudioEngine::new(&asset_dir) {
             Ok(engine) => Some(engine),
             Err(err) => {
                 eprintln!("audio disabled: {err}");
@@ -119,6 +120,13 @@ pub fn run() {
             .unwrap();
         cx.activate(true);
     })
+}
+
+fn resolve_sfx_dir(cx: &App) -> PathBuf {
+    if let Ok(app_path) = cx.app_path() {
+        return app_path.join("Contents/Resources/assets/sfx");
+    }
+    Path::new("assets/sfx").to_path_buf()
 }
 
 struct TetrisView {

@@ -15,6 +15,7 @@ anyhow = "1.0"
 name = "gpui-tetris"
 identifier = "com.lyuguoning.com.gpui-tetris"
 icon = ["assets/icon.icns"]
+resources = ["assets/sfx"]
 
 [patch.crates-io]
 zed-font-kit = { path = "vendor/zed-font-kit" }
