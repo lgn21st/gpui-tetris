@@ -20,6 +20,7 @@ pub struct GameConfig {
     pub tick_ms: u64,
     pub soft_drop_multiplier: u64,
     pub lock_delay_ms: u64,
+    pub lock_reset_limit: u32,
     pub base_drop_ms: u64,
     pub soft_drop_grace_ms: u64,
 }
@@ -30,6 +31,7 @@ impl Default for GameConfig {
             tick_ms: 16,
             soft_drop_multiplier: 10,
             lock_delay_ms: 450,
+            lock_reset_limit: 15,
             base_drop_ms: 1000,
             soft_drop_grace_ms: 150,
         }
@@ -51,6 +53,8 @@ pub struct GameState {
     pub tick_ms: u64,
     pub soft_drop_multiplier: u64,
     pub lock_delay_ms: u64,
+    pub lock_reset_limit: u32,
+    pub lock_reset_count: u32,
     pub base_drop_ms: u64,
     pub soft_drop_grace_ms: u64,
     pub soft_drop_active: bool,
@@ -87,6 +91,8 @@ impl GameState {
             tick_ms: config.tick_ms,
             soft_drop_multiplier: config.soft_drop_multiplier,
             lock_delay_ms: config.lock_delay_ms,
+            lock_reset_limit: config.lock_reset_limit,
+            lock_reset_count: 0,
             base_drop_ms: config.base_drop_ms,
             soft_drop_grace_ms: config.soft_drop_grace_ms,
             soft_drop_active: false,
@@ -107,6 +113,7 @@ impl GameState {
         self.active = Tetromino::new(kind, spawn_x, spawn_y);
         self.active.rotation = Rotation::North;
         self.can_hold = true;
+        self.lock_reset_count = 0;
 
         if !self.board.can_place(&self.active, self.active.x, self.active.y, self.active.rotation) {
             self.game_over = true;
@@ -189,6 +196,7 @@ impl GameState {
 
         if self.can_move_down() {
             self.lock_timer_ms = 0;
+            self.lock_reset_count = 0;
         } else {
             self.lock_timer_ms = self.lock_timer_ms.saturating_add(elapsed_ms);
             if self.lock_timer_ms >= self.lock_delay_ms {
@@ -295,6 +303,7 @@ impl GameState {
             tick_ms: self.tick_ms,
             soft_drop_multiplier: self.soft_drop_multiplier,
             lock_delay_ms: self.lock_delay_ms,
+            lock_reset_limit: self.lock_reset_limit,
             base_drop_ms: self.base_drop_ms,
             soft_drop_grace_ms: self.soft_drop_grace_ms,
         };
@@ -336,7 +345,7 @@ impl GameState {
         {
             self.active.x = new_x;
             self.active.y = new_y;
-            self.lock_timer_ms = 0;
+            self.handle_lock_reset();
             return true;
         }
         false
@@ -371,7 +380,7 @@ impl GameState {
                 self.active.x = new_x;
                 self.active.y = new_y;
                 self.active.rotation = next_rotation;
-                self.lock_timer_ms = 0;
+                self.handle_lock_reset();
                 return true;
             }
         }
@@ -382,6 +391,19 @@ impl GameState {
     fn can_move_down(&self) -> bool {
         self.board
             .can_place(&self.active, self.active.x, self.active.y + 1, self.active.rotation)
+    }
+
+    fn handle_lock_reset(&mut self) {
+        if self.can_move_down() {
+            self.lock_timer_ms = 0;
+            self.lock_reset_count = 0;
+            return;
+        }
+
+        if self.lock_reset_count < self.lock_reset_limit {
+            self.lock_timer_ms = 0;
+            self.lock_reset_count += 1;
+        }
     }
 }
 

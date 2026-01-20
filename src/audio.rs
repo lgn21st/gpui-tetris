@@ -13,6 +13,8 @@ pub struct AudioEngine {
     _stream: Arc<cpal::Stream>,
 }
 
+const MASTER_GAIN: f32 = 0.6;
+
 impl AudioEngine {
     pub fn new(asset_dir: &Path) -> anyhow::Result<Self> {
         let (tx, rx) = crossbeam_channel::unbounded();
@@ -45,6 +47,7 @@ struct Voice {
     channels: u16,
     position: f32,
     step: f32,
+    gain: f32,
 }
 
 fn load_assets(asset_dir: &Path) -> anyhow::Result<HashMap<&'static str, SoundAsset>> {
@@ -184,6 +187,7 @@ fn render_audio(
                     channels: asset.channels,
                     position: 0.0,
                     step,
+                    gain: sound_event_gain(&event) * MASTER_GAIN,
                 };
                 if let Ok(mut guard) = voices.lock() {
                     guard.push(voice);
@@ -207,9 +211,9 @@ fn render_audio(
 
                 let frame_index = voice.position as usize;
                 let base = frame_index * voice.channels as usize;
-                let left = voice.samples.get(base).copied().unwrap_or(0.0);
+                let left = voice.samples.get(base).copied().unwrap_or(0.0) * voice.gain;
                 let right = if voice.channels > 1 {
-                    voice.samples.get(base + 1).copied().unwrap_or(left)
+                    voice.samples.get(base + 1).copied().unwrap_or(0.0) * voice.gain
                 } else {
                     left
                 };
@@ -231,7 +235,7 @@ fn render_audio(
     }
 
     for sample in output.iter_mut() {
-        *sample = sample.clamp(-1.0, 1.0);
+        *sample = soft_clip(*sample).clamp(-1.0, 1.0);
     }
 }
 
@@ -264,4 +268,23 @@ pub fn sound_event_to_asset(event: &SoundEvent) -> Option<&'static str> {
         SoundEvent::LineClear(_) => Some("line_clear_4"),
         SoundEvent::GameOver => Some("game_over"),
     }
+}
+
+pub fn sound_event_gain(event: &SoundEvent) -> f32 {
+    match event {
+        SoundEvent::Move => 0.25,
+        SoundEvent::Rotate => 0.35,
+        SoundEvent::SoftDrop => 0.2,
+        SoundEvent::HardDrop => 0.6,
+        SoundEvent::Hold => 0.5,
+        SoundEvent::LineClear(1) => 0.6,
+        SoundEvent::LineClear(2) => 0.7,
+        SoundEvent::LineClear(3) => 0.8,
+        SoundEvent::LineClear(_) => 0.9,
+        SoundEvent::GameOver => 0.8,
+    }
+}
+
+fn soft_clip(sample: f32) -> f32 {
+    sample / (1.0 + sample.abs())
 }

@@ -64,12 +64,13 @@ PRs should include:
 - Pause/game-over overlay rendered on the board.
 - Soft drop uses a short input-driven grace window.
 - Soft/hard drops award per-cell points; movement/rotation resets lock timer.
+- Lock delay resets are capped while grounded to avoid infinite stalls.
 - DAS/ARR-style repeat movement is handled via key down/up with timers.
 - Next queue is kept at a minimum size for previews.
 - Level speed uses a stepped curve; line clears briefly pause gravity.
 - Line clear flash and game-over tint are rendered in the board overlay.
 - Default lock delay is 450ms; line clear pause is 180ms.
-- Sound events are emitted for moves, drops, line clears, holds, and game over and played if WAVs are present under `assets/sfx/`.
+- Sound events are emitted for moves, drops, line clears, holds, and game over and played if WAVs are present under `assets/sfx/` with per-event gain and soft clipping.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

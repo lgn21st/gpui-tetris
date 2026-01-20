@@ -37,11 +37,13 @@ cargo clippy # lint
 Scores follow classic rules: 1/2/3/4 line clears award 40/100/300/1200 points, multiplied by (level + 1). Level increases every 10 lines. Soft drop awards 1 point per cell, hard drop awards 2 points per cell.
 
 ## Status
-The UI renders the board with active and ghost pieces, inputs (including hold) are wired, auto-drop ticking runs each frame, and pause/game-over overlays plus next/hold previews are shown. Soft drop acceleration is input-driven with a short grace window, and left/right movement uses DAS/ARR repeat logic. Level speed follows a stepped curve and line clears briefly pause gravity with a flash effect; game over adds a red tint overlay. Sound events are emitted and, if `assets/sfx/` contains matching WAVs, played through the cpal mixer.
+The UI renders the board with active and ghost pieces, inputs (including hold) are wired, auto-drop ticking runs each frame, and pause/game-over overlays plus next/hold previews are shown. Soft drop acceleration is input-driven with a short grace window, and left/right movement uses DAS/ARR repeat logic. Level speed follows a stepped curve and line clears briefly pause gravity with a flash effect; game over adds a red tint overlay. Lock delay resets are limited while grounded to prevent infinite stalling. Sound events are emitted and, if `assets/sfx/` contains matching WAVs, played through the cpal mixer.
 
 SFX file names:
 `move.wav`, `rotate.wav`, `soft_drop.wav`, `hard_drop.wav`, `hold.wav`,
 `line_clear_1.wav`..`line_clear_4.wav`, `game_over.wav`.
+
+See `docs/audio_assets.md` for the Kenney Interface Sounds (CC0) mapping and license.
 
 ## Roadmap
 - Consider audio polish once core rules stabilize.
