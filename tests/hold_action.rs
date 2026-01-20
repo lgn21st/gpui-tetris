@@ -1,5 +1,5 @@
 use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{spawn_position, Rotation, Tetromino, TetrominoType};
+use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
 use gpui_tetris::game::state::{GameConfig, GameState};
 
 #[test]

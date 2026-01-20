@@ -2,7 +2,10 @@ use gpui_tetris::game::input::{RepeatConfig, RepeatState};
 
 #[test]
 fn repeat_press_fires_once_until_release() {
-    let config = RepeatConfig { das_ms: 100, arr_ms: 50 };
+    let config = RepeatConfig {
+        das_ms: 100,
+        arr_ms: 50,
+    };
     let mut state = RepeatState::new();
 
     assert!(state.press());
@@ -16,7 +19,10 @@ fn repeat_press_fires_once_until_release() {
 
 #[test]
 fn repeat_fires_multiple_steps_after_das() {
-    let config = RepeatConfig { das_ms: 100, arr_ms: 50 };
+    let config = RepeatConfig {
+        das_ms: 100,
+        arr_ms: 50,
+    };
     let mut state = RepeatState::new();
 
     state.press();

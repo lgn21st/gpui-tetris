@@ -1,6 +1,6 @@
+use gpui_tetris::game::board::BOARD_HEIGHT;
 use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
-use gpui_tetris::game::board::BOARD_HEIGHT;
 
 #[test]
 fn tick_advances_piece_after_drop_interval() {

@@ -1,4 +1,4 @@
-use gpui_tetris::game::input::{key_to_action, GameAction};
+use gpui_tetris::game::input::{GameAction, key_to_action};
 
 #[test]
 fn key_to_action_maps_supported_keys() {

@@ -6,7 +6,13 @@ Goal: build a desktop Tetris game in Rust using `gpui`.
 - `src/`: Rust sources for the app.
   - `main.rs`: app entry and window setup.
   - `game/`: gameplay logic (board, pieces, rules).
+    - `game/state/`: split state helpers (actions, scoring, timing, kicks, rng, types).
   - `ui/`: gpui views, input handling, HUD.
+    - `ui/app.rs`: app bootstrap, window/menu setup, keybindings.
+    - `ui/view.rs`: main render loop + event wiring.
+    - `ui/input.rs`: keyboard/controller repeat handling.
+    - `ui/ui_state.rs`: session state + HUD labels + SFX toggles.
+    - `ui/render/`: board/panel/overlay render helpers.
 - `assets/`: optional images/fonts/sfx.
 - `docs/`: design notes and diagrams.
 - `tests/`: unit tests for rules/board state.

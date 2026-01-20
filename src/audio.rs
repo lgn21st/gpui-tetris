@@ -3,8 +3,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crossbeam_channel::{Receiver, Sender};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use crossbeam_channel::{Receiver, Sender};
 
 use crate::game::state::SoundEvent;
 
@@ -40,7 +40,8 @@ impl AudioEngine {
 
     pub fn set_master_gain(&self, gain: f32) {
         let clamped = gain.clamp(0.0, 1.0);
-        self.master_gain.store(f32_to_bits(clamped), Ordering::Relaxed);
+        self.master_gain
+            .store(f32_to_bits(clamped), Ordering::Relaxed);
     }
 
     pub fn master_gain(&self) -> f32 {
@@ -134,7 +135,15 @@ fn build_output_stream(
                         scratch.resize(data.len(), 0.0);
                     }
                     let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                    render_audio(&mut scratch, channels, sample_rate, &rx, &assets, &voices, gain);
+                    render_audio(
+                        &mut scratch,
+                        channels,
+                        sample_rate,
+                        &rx,
+                        &assets,
+                        &voices,
+                        gain,
+                    );
                     for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
                         *dst = <i16 as cpal::Sample>::from_sample(*sample);
                     }
@@ -157,7 +166,15 @@ fn build_output_stream(
                         scratch.resize(data.len(), 0.0);
                     }
                     let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                    render_audio(&mut scratch, channels, sample_rate, &rx, &assets, &voices, gain);
+                    render_audio(
+                        &mut scratch,
+                        channels,
+                        sample_rate,
+                        &rx,
+                        &assets,
+                        &voices,
+                        gain,
+                    );
                     for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
                         *dst = <u16 as cpal::Sample>::from_sample(*sample);
                     }

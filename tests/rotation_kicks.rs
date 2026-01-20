@@ -1,7 +1,7 @@
-use gpui_tetris::game::board::{Board, BOARD_WIDTH};
+use gpui_tetris::game::board::{BOARD_WIDTH, Board};
+use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
-use gpui_tetris::game::input::GameAction;
 
 #[test]
 fn rotate_kicks_inside_left_wall() {

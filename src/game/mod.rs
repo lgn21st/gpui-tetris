@@ -1,9 +1,9 @@
 pub mod board;
+pub mod input;
 pub mod pieces;
 pub mod state;
-pub mod input;
 
 pub use board::{Board, Cell};
-pub use pieces::{Tetromino, TetrominoType, Rotation};
-pub use state::{GameConfig, GameState};
 pub use input::GameAction;
+pub use pieces::{Rotation, Tetromino, TetrominoType};
+pub use state::{GameConfig, GameState};

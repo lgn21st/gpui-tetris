@@ -69,8 +69,8 @@ impl Board {
         let mut write_row = BOARD_HEIGHT as i32 - 1;
 
         for read_row in (0..BOARD_HEIGHT as i32).rev() {
-            let full = (0..BOARD_WIDTH as i32)
-                .all(|x| self.cells[read_row as usize][x as usize].filled);
+            let full =
+                (0..BOARD_WIDTH as i32).all(|x| self.cells[read_row as usize][x as usize].filled);
 
             if full {
                 cleared += 1;

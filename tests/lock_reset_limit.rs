@@ -1,7 +1,7 @@
+use gpui_tetris::game::board::BOARD_HEIGHT;
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
-use gpui_tetris::game::board::BOARD_HEIGHT;
 
 #[test]
 fn grounded_moves_reset_lock_delay_until_limit() {
@@ -22,10 +22,5 @@ fn grounded_moves_reset_lock_delay_until_limit() {
     assert_eq!(state.lock_timer_ms, 900);
 
     state.tick(200, false);
-    assert!(state
-        .board
-        .cells
-        .iter()
-        .flatten()
-        .any(|cell| cell.filled));
+    assert!(state.board.cells.iter().flatten().any(|cell| cell.filled));
 }
