@@ -132,25 +132,30 @@ impl GameState {
         }
     }
 
-    pub fn apply_line_clear(&mut self, cleared: usize, t_spin: bool) {
-        let qualifies_b2b = t_spin && cleared > 0 || cleared == 4;
+    pub fn apply_line_clear(&mut self, cleared: usize, t_spin: TSpinKind) {
+        let qualifies_b2b = (t_spin == TSpinKind::Full && cleared > 0) || cleared == 4;
         let level = self.level + 1;
-        let mut points = if t_spin {
-            match cleared {
-                0 => 200,
+        let mut points = match t_spin {
+            TSpinKind::Full => match cleared {
+                0 => 400,
                 1 => 800,
                 2 => 1200,
                 3 => 1600,
                 _ => 0,
-            }
-        } else {
-            match cleared {
+            },
+            TSpinKind::Mini => match cleared {
+                0 => 100,
+                1 => 200,
+                2 => 400,
+                _ => 0,
+            },
+            TSpinKind::None => match cleared {
                 1 => 40,
                 2 => 100,
                 3 => 300,
                 4 => 1200,
                 _ => 0,
-            }
+            },
         };
 
         if qualifies_b2b && self.back_to_back {
@@ -171,7 +176,7 @@ impl GameState {
             self.level = self.lines / 10;
         } else {
             self.combo = -1;
-            self.back_to_back = qualifies_b2b;
+            self.back_to_back = false;
         }
 
         if points > 0 {
@@ -354,7 +359,18 @@ impl GameState {
         if self.lock_delay_ms == 0 {
             return false;
         }
-        self.is_grounded() && self.lock_timer_ms >= (self.lock_delay_ms * 7 / 10)
+        self.is_grounded() && self.lock_timer_ms >= (self.lock_delay_ms * 3 / 5)
+    }
+
+    pub fn lock_warning_intensity(&self) -> f32 {
+        if !self.lock_warning_active() {
+            return 0.0;
+        }
+        if (self.lock_timer_ms / 120) % 2 == 0 {
+            0.12
+        } else {
+            0.22
+        }
     }
 
     pub fn landing_flash_active(&self) -> bool {
@@ -510,7 +526,7 @@ impl GameState {
     }
 
     fn lock_active_piece(&mut self) {
-        let t_spin = self.is_t_spin();
+        let t_spin = self.t_spin_kind();
         self.set_landing_flash();
         self.board.lock_piece(&self.active);
         let cleared = self.board.clear_lines();
@@ -527,9 +543,9 @@ impl GameState {
         self.landing_flash_timer_ms = 120;
     }
 
-    fn is_t_spin(&self) -> bool {
+    fn t_spin_kind(&self) -> TSpinKind {
         if self.active.kind != TetrominoType::T || !self.last_action_rotate {
-            return false;
+            return TSpinKind::None;
         }
 
         let center_x = self.active.x + 1;
@@ -546,8 +562,32 @@ impl GameState {
                 filled += 1;
             }
         }
-        filled >= 3
+        if filled < 3 {
+            return TSpinKind::None;
+        }
+
+        let (front_a, front_b) = match self.active.rotation {
+            Rotation::North => ((center_x - 1, center_y - 1), (center_x + 1, center_y - 1)),
+            Rotation::East => ((center_x + 1, center_y - 1), (center_x + 1, center_y + 1)),
+            Rotation::South => ((center_x - 1, center_y + 1), (center_x + 1, center_y + 1)),
+            Rotation::West => ((center_x - 1, center_y - 1), (center_x - 1, center_y + 1)),
+        };
+        let front_filled = self.board.is_occupied(front_a.0, front_a.1) as u8
+            + self.board.is_occupied(front_b.0, front_b.1) as u8;
+
+        if front_filled == 2 {
+            TSpinKind::Full
+        } else {
+            TSpinKind::Mini
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TSpinKind {
+    None,
+    Mini,
+    Full,
 }
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,7 @@
 use gpui_tetris::game::board::BOARD_HEIGHT;
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState};
+use gpui_tetris::game::state::{GameConfig, GameState, TSpinKind};
 
 #[test]
 fn soft_drop_awards_point_per_cell() {
@@ -19,7 +19,7 @@ fn soft_drop_awards_point_per_cell() {
 #[test]
 fn line_clear_sets_timer() {
     let mut state = GameState::new(6, GameConfig::default());
-    state.apply_line_clear(1, false);
+    state.apply_line_clear(1, TSpinKind::None);
     assert!(state.line_clear_timer_ms > 0);
 }
 

@@ -1,6 +1,6 @@
 use gpui_tetris::game::board::{Board, BOARD_HEIGHT, BOARD_WIDTH};
 use gpui_tetris::game::pieces::{spawn_position, Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState};
+use gpui_tetris::game::state::{GameConfig, GameState, TSpinKind};
 
 #[test]
 fn rotation_cycles() {
@@ -68,13 +68,13 @@ fn apply_line_clear_updates_score_and_level() {
     let config = GameConfig::default();
     let mut state = GameState::new(1, config);
 
-    state.apply_line_clear(1, false);
+    state.apply_line_clear(1, TSpinKind::None);
     assert_eq!(state.lines, 1);
     assert_eq!(state.score, 40);
     assert_eq!(state.level, 0);
 
     state.lines = 9;
-    state.apply_line_clear(1, false);
+    state.apply_line_clear(1, TSpinKind::None);
     assert_eq!(state.lines, 10);
     assert_eq!(state.level, 1);
     assert_eq!(state.score, 130);

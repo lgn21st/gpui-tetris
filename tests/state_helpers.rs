@@ -34,10 +34,19 @@ fn lock_warning_triggers_near_delay() {
     state.lock_delay_ms = 1000;
     state.lock_timer_ms = 600;
     state.active = Tetromino::new(TetrominoType::O, 4, BOARD_HEIGHT as i32 - 2);
-    assert!(!state.lock_warning_active());
-
-    state.lock_timer_ms = 700;
     assert!(state.lock_warning_active());
+
+    state.lock_timer_ms = 500;
+    assert!(!state.lock_warning_active());
+}
+
+#[test]
+fn lock_warning_intensity_is_nonzero_when_active() {
+    let mut state = GameState::new(6, GameConfig::default());
+    state.lock_delay_ms = 1000;
+    state.lock_timer_ms = 600;
+    state.active = Tetromino::new(TetrominoType::O, 4, BOARD_HEIGHT as i32 - 2);
+    assert!(state.lock_warning_intensity() > 0.0);
 }
 
 #[test]

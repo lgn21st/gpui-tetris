@@ -219,7 +219,7 @@ impl Render for TetrisView {
                             .relative()
                             .child(div().flex().flex_col().children(rows))
                             .child(render_line_clear_flash(self.state.line_clear_timer_ms > 0))
-                            .child(render_lock_warning(self.state.lock_warning_active()))
+                            .child(render_lock_warning(self.state.lock_warning_intensity()))
                             .child(render_game_over_tint(self.state.game_over))
                             .child(render_overlay(self.state.paused, self.state.game_over)),
                     )
@@ -548,8 +548,8 @@ fn render_game_over_tint(active: bool) -> impl IntoElement {
         .opacity(0.28)
 }
 
-fn render_lock_warning(active: bool) -> impl IntoElement {
-    if !active {
+fn render_lock_warning(intensity: f32) -> impl IntoElement {
+    if intensity <= 0.0 {
         return div().hidden();
     }
 
@@ -560,7 +560,7 @@ fn render_lock_warning(active: bool) -> impl IntoElement {
         .right_0()
         .bottom_0()
         .bg(rgb(0x7a1c1c))
-        .opacity(0.18)
+        .opacity(intensity)
 }
 fn register_action<A: Action + 'static>(
     cx: &mut App,

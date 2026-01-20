@@ -1,6 +1,6 @@
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState, SoundEvent};
+use gpui_tetris::game::state::{GameConfig, GameState, SoundEvent, TSpinKind};
 
 #[test]
 fn emits_sound_events_for_actions() {
@@ -23,7 +23,7 @@ fn emits_sound_events_for_actions() {
 #[test]
 fn emits_line_clear_sound() {
     let mut state = GameState::new(2, GameConfig::default());
-    state.apply_line_clear(2, false);
+    state.apply_line_clear(2, TSpinKind::None);
     let events = state.take_sound_events();
     assert!(events.contains(&SoundEvent::LineClear(2)));
 }
