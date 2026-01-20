@@ -70,12 +70,12 @@ PRs should include:
 - Next queue is kept at a minimum size for previews.
 - Level speed uses a stepped curve; line clears briefly pause gravity.
 - Line clear flash and game-over tint are rendered in the board overlay.
-- Lock warning pulse appears near lock delay expiry; landing sparks highlight the last locked piece.
+- Lock warning pulse appears near lock delay expiry; landing sparks highlight the last locked piece; HUD shows a lock-delay bar.
 - Active/ghost pieces hide during the line-clear pause.
 - Default lock delay is 450ms; line clear pause is 180ms.
 - Sound events are emitted for moves, drops, line clears, holds, and game over and played if WAVs are present under `assets/sfx/` with per-event gain and soft clipping.
 - HUD shows hold availability plus grounded/lock-reset remaining status.
-- Combos, back-to-back bonuses, and basic T-spin scoring (full vs mini) are enabled.
+- Combos, back-to-back bonuses, and T-spin scoring (full vs mini) are enabled, with a HUD cue when B2B is active.
 - Rotation uses SRS kick tables for I/J/L/S/T/Z.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 

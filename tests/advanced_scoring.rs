@@ -69,3 +69,14 @@ fn t_spin_mini_no_line_scores_less() {
     assert_eq!(state.score, 100);
     assert!(!state.back_to_back);
 }
+
+#[test]
+fn t_spin_mini_line_clear_scores() {
+    let mut state = GameState::new(5, GameConfig::default());
+    state.apply_line_clear(1, TSpinKind::Mini);
+    assert_eq!(state.score, 200);
+
+    let mut state = GameState::new(6, GameConfig::default());
+    state.apply_line_clear(2, TSpinKind::Mini);
+    assert_eq!(state.score, 400);
+}

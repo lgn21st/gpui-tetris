@@ -292,6 +292,19 @@ impl Render for TetrisView {
                                     .child(format!(
                                         "B2B: {}",
                                         if self.state.back_to_back { "Yes" } else { "No" }
+                                    ))
+                                    .child(if self.state.back_to_back {
+                                        div()
+                                            .text_sm()
+                                            .text_color(rgb(0xfacc15))
+                                            .child("B2B bonus active")
+                                    } else {
+                                        div().hidden()
+                                    })
+                                    .child(render_lock_bar(
+                                        self.state.lock_timer_ms,
+                                        self.state.lock_delay_ms,
+                                        self.state.is_grounded(),
                                     )),
                             )
                             .child(
@@ -561,6 +574,40 @@ fn render_lock_warning(intensity: f32) -> impl IntoElement {
         .bottom_0()
         .bg(rgb(0x7a1c1c))
         .opacity(intensity)
+}
+
+fn render_lock_bar(lock_timer_ms: u64, lock_delay_ms: u64, grounded: bool) -> impl IntoElement {
+    const BAR_WIDTH: f32 = 140.0;
+    const BAR_HEIGHT: f32 = 6.0;
+
+    if !grounded || lock_delay_ms == 0 {
+        return div().hidden();
+    }
+
+    let ratio = (lock_timer_ms as f32 / lock_delay_ms as f32).clamp(0.0, 1.0);
+    let fill_width = BAR_WIDTH * ratio;
+    let fill_color = if ratio > 0.8 {
+        rgb(0xf87171)
+    } else if ratio > 0.5 {
+        rgb(0xfbbf24)
+    } else {
+        rgb(0x34d399)
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(div().text_sm().child("Lock delay"))
+        .child(
+            div()
+                .w(px(BAR_WIDTH))
+                .h(px(BAR_HEIGHT))
+                .bg(rgb(0x1f2937))
+                .border(px(1.0))
+                .border_color(rgb(0x374151))
+                .child(div().w(px(fill_width)).h(px(BAR_HEIGHT)).bg(fill_color)),
+        )
 }
 fn register_action<A: Action + 'static>(
     cx: &mut App,
