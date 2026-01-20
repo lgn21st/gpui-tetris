@@ -79,6 +79,7 @@ PRs should include:
 - Classic ruleset is default; modern combo/B2B/T-spin scoring is available by switching rulesets.
 - Rotation uses SRS kick tables for I/J/L/S/T/Z.
 - Title/settings overlays are shown; focus loss auto-pauses; in-game settings expose SFX volume/mute/reset.
+- Fullscreen toggle (Cmd+Ctrl+F) is available.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

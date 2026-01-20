@@ -20,6 +20,7 @@ A desktop Tetris built in Rust with `gpui`, targeting a fixed-size window on mac
 - M: mute/unmute SFX
 - +/-: adjust SFX volume
 - 0: reset settings
+- Cmd+Ctrl+F: toggle fullscreen
 
 ## Project Structure
 - `src/main.rs`: app entry point.

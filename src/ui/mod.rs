@@ -33,6 +33,7 @@ actions!(
     tetris,
     [
         Quit,
+        ToggleFullscreen,
         MoveLeft,
         MoveRight,
         SoftDrop,
@@ -90,6 +91,15 @@ pub fn run() {
                 cx.new(|cx| TetrisView::new(cx, audio))
             })
             .unwrap();
+        let window_handle = window.clone();
+
+        cx.on_action({
+            let window = window_handle.clone();
+            move |_: &ToggleFullscreen, cx| {
+                let _ = window.update(cx, |_, window, _| window.toggle_fullscreen());
+            }
+        });
+        cx.bind_keys([KeyBinding::new("cmd-ctrl-f", ToggleFullscreen, None)]);
         let view = window.update(cx, |_, _, cx| cx.entity()).unwrap();
 
         register_action::<MoveLeft>(cx, view.clone(), GameAction::MoveLeft);
