@@ -105,14 +105,8 @@ impl InputState {
         let Some(mut gilrs) = self.gilrs.take() else {
             return Vec::new();
         };
-        let mut events = Vec::new();
+        let mut actions = Vec::with_capacity(8);
         while let Some(event) = gilrs.next_event() {
-            events.push(event);
-        }
-        self.gilrs = Some(gilrs);
-
-        let mut actions = Vec::new();
-        for event in events {
             if self.gamepad_id.is_none() {
                 self.gamepad_id = Some(event.id);
             }
@@ -145,6 +139,7 @@ impl InputState {
                 _ => {}
             }
         }
+        self.gilrs = Some(gilrs);
 
         actions
     }
