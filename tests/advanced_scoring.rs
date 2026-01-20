@@ -42,6 +42,6 @@ fn t_spin_no_line_scores_and_sets_back_to_back_false() {
 
     state.apply_action(GameAction::HardDrop);
 
-    assert_eq!(state.score, 100);
+    assert_eq!(state.score, 200);
     assert!(!state.back_to_back);
 }

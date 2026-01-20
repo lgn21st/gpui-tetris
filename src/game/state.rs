@@ -137,7 +137,7 @@ impl GameState {
         let level = self.level + 1;
         let mut points = if t_spin {
             match cleared {
-                0 => 100,
+                0 => 200,
                 1 => 800,
                 2 => 1200,
                 3 => 1600,
