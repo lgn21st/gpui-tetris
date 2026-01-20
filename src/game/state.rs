@@ -15,6 +15,12 @@ pub enum SoundEvent {
     Hold,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ruleset {
+    Classic,
+    Modern,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct GameConfig {
     pub tick_ms: u64,
@@ -23,6 +29,7 @@ pub struct GameConfig {
     pub lock_reset_limit: u32,
     pub base_drop_ms: u64,
     pub soft_drop_grace_ms: u64,
+    pub ruleset: Ruleset,
 }
 
 impl Default for GameConfig {
@@ -34,6 +41,7 @@ impl Default for GameConfig {
             lock_reset_limit: 15,
             base_drop_ms: 1000,
             soft_drop_grace_ms: 150,
+            ruleset: Ruleset::Classic,
         }
     }
 }
@@ -50,6 +58,7 @@ pub struct GameState {
     pub lines: u32,
     pub combo: i32,
     pub back_to_back: bool,
+    pub ruleset: Ruleset,
     pub game_over: bool,
     pub paused: bool,
     pub tick_ms: u64,
@@ -93,6 +102,7 @@ impl GameState {
             lines: 0,
             combo: -1,
             back_to_back: false,
+            ruleset: config.ruleset,
             game_over: false,
             paused: false,
             tick_ms: config.tick_ms,
@@ -135,30 +145,40 @@ impl GameState {
     pub fn apply_line_clear(&mut self, cleared: usize, t_spin: TSpinKind) {
         let qualifies_b2b = (t_spin == TSpinKind::Full && cleared > 0) || cleared == 4;
         let level = self.level + 1;
-        let mut points = match t_spin {
-            TSpinKind::Full => match cleared {
-                0 => 400,
-                1 => 800,
-                2 => 1200,
-                3 => 1600,
-                _ => 0,
-            },
-            TSpinKind::Mini => match cleared {
-                0 => 100,
-                1 => 200,
-                2 => 400,
-                _ => 0,
-            },
-            TSpinKind::None => match cleared {
+        let mut points = if self.ruleset == Ruleset::Classic {
+            match cleared {
                 1 => 40,
                 2 => 100,
                 3 => 300,
                 4 => 1200,
                 _ => 0,
-            },
+            }
+        } else {
+            match t_spin {
+                TSpinKind::Full => match cleared {
+                    0 => 400,
+                    1 => 800,
+                    2 => 1200,
+                    3 => 1600,
+                    _ => 0,
+                },
+                TSpinKind::Mini => match cleared {
+                    0 => 100,
+                    1 => 200,
+                    2 => 400,
+                    _ => 0,
+                },
+                TSpinKind::None => match cleared {
+                    1 => 40,
+                    2 => 100,
+                    3 => 300,
+                    4 => 1200,
+                    _ => 0,
+                },
+            }
         };
 
-        if qualifies_b2b && self.back_to_back {
+        if self.ruleset == Ruleset::Modern && qualifies_b2b && self.back_to_back {
             points = points * 3 / 2;
         }
 
@@ -166,17 +186,27 @@ impl GameState {
             self.line_clear_timer_ms = 180;
             self.sound_events.push(SoundEvent::LineClear(cleared as u8));
             self.lines += cleared as u32;
-            self.combo += 1;
-            if self.combo > 0 {
-                points += 50 * self.combo as u32;
+            if self.ruleset == Ruleset::Modern {
+                self.combo += 1;
+                if self.combo > 0 {
+                    points += 50 * self.combo as u32;
+                }
+                self.back_to_back = qualifies_b2b;
+            } else {
+                self.combo = -1;
+                self.back_to_back = false;
             }
-            self.back_to_back = qualifies_b2b;
 
             // Classic progression: advance level every 10 lines.
             self.level = self.lines / 10;
         } else {
-            self.combo = -1;
-            self.back_to_back = false;
+            if self.ruleset == Ruleset::Modern {
+                self.combo = -1;
+                self.back_to_back = false;
+            } else {
+                self.combo = -1;
+                self.back_to_back = false;
+            }
         }
 
         if points > 0 {
@@ -355,6 +385,10 @@ impl GameState {
         !self.can_move_down()
     }
 
+    pub fn is_classic_ruleset(&self) -> bool {
+        self.ruleset == Ruleset::Classic
+    }
+
     pub fn lock_warning_active(&self) -> bool {
         if self.lock_delay_ms == 0 {
             return false;
@@ -386,6 +420,7 @@ impl GameState {
             lock_reset_limit: self.lock_reset_limit,
             base_drop_ms: self.base_drop_ms,
             soft_drop_grace_ms: self.soft_drop_grace_ms,
+            ruleset: self.ruleset,
         };
         *self = GameState::new(seed, config);
     }
@@ -526,7 +561,11 @@ impl GameState {
     }
 
     fn lock_active_piece(&mut self) {
-        let t_spin = self.t_spin_kind();
+        let t_spin = if self.ruleset == Ruleset::Modern {
+            self.t_spin_kind()
+        } else {
+            TSpinKind::None
+        };
         self.set_landing_flash();
         self.board.lock_piece(&self.active);
         let cleared = self.board.clear_lines();

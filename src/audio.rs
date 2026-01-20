@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender};
@@ -11,27 +12,39 @@ use crate::game::state::SoundEvent;
 pub struct AudioEngine {
     sender: Sender<SoundEvent>,
     _stream: Arc<cpal::Stream>,
+    master_gain: Arc<AtomicU32>,
 }
 
-const MASTER_GAIN: f32 = 0.6;
+const DEFAULT_MASTER_GAIN: f32 = 0.6;
 const MAX_VOICES: usize = 16;
 
 impl AudioEngine {
     pub fn new(asset_dir: &Path) -> anyhow::Result<Self> {
         let (tx, rx) = crossbeam_channel::unbounded();
         let assets = load_assets(asset_dir)?;
+        let master_gain = Arc::new(AtomicU32::new(f32_to_bits(DEFAULT_MASTER_GAIN)));
 
-        let stream = build_output_stream(rx, assets)?;
+        let stream = build_output_stream(rx, assets, master_gain.clone())?;
         stream.play()?;
 
         Ok(Self {
             sender: tx,
             _stream: Arc::new(stream),
+            master_gain,
         })
     }
 
     pub fn play(&self, event: SoundEvent) {
         let _ = self.sender.send(event);
+    }
+
+    pub fn set_master_gain(&self, gain: f32) {
+        let clamped = gain.clamp(0.0, 1.0);
+        self.master_gain.store(f32_to_bits(clamped), Ordering::Relaxed);
+    }
+
+    pub fn master_gain(&self) -> f32 {
+        bits_to_f32(self.master_gain.load(Ordering::Relaxed))
     }
 }
 
@@ -78,6 +91,7 @@ fn load_assets(asset_dir: &Path) -> anyhow::Result<HashMap<&'static str, SoundAs
 fn build_output_stream(
     rx: Receiver<SoundEvent>,
     assets: HashMap<&'static str, SoundAsset>,
+    master_gain: Arc<AtomicU32>,
 ) -> anyhow::Result<cpal::Stream> {
     let host = cpal::default_host();
     let device = host
@@ -97,8 +111,10 @@ fn build_output_stream(
             {
                 let assets = assets.clone();
                 let voices = voices.clone();
+                let master_gain = master_gain.clone();
                 move |data: &mut [f32], _| {
-                    render_audio(data, channels, sample_rate, &rx, &assets, &voices);
+                    let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
+                    render_audio(data, channels, sample_rate, &rx, &assets, &voices, gain);
                 }
             },
             move |err| {
@@ -111,9 +127,11 @@ fn build_output_stream(
             {
                 let assets = assets.clone();
                 let voices = voices.clone();
+                let master_gain = master_gain.clone();
                 move |data: &mut [i16], _| {
                     let mut buffer = vec![0.0f32; data.len()];
-                    render_audio(&mut buffer, channels, sample_rate, &rx, &assets, &voices);
+                    let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
+                    render_audio(&mut buffer, channels, sample_rate, &rx, &assets, &voices, gain);
                     for (dst, sample) in data.iter_mut().zip(buffer.iter()) {
                         *dst = <i16 as cpal::Sample>::from_sample(*sample);
                     }
@@ -129,9 +147,11 @@ fn build_output_stream(
             {
                 let assets = assets.clone();
                 let voices = voices.clone();
+                let master_gain = master_gain.clone();
                 move |data: &mut [u16], _| {
                     let mut buffer = vec![0.0f32; data.len()];
-                    render_audio(&mut buffer, channels, sample_rate, &rx, &assets, &voices);
+                    let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
+                    render_audio(&mut buffer, channels, sample_rate, &rx, &assets, &voices, gain);
                     for (dst, sample) in data.iter_mut().zip(buffer.iter()) {
                         *dst = <u16 as cpal::Sample>::from_sample(*sample);
                     }
@@ -178,6 +198,7 @@ fn render_audio(
     rx: &Receiver<SoundEvent>,
     assets: &Arc<HashMap<&'static str, SoundAsset>>,
     voices: &Arc<Mutex<Vec<Voice>>>,
+    master_gain: f32,
 ) {
     for event in rx.try_iter() {
         if let Some(asset_key) = sound_event_to_asset(&event) {
@@ -188,7 +209,7 @@ fn render_audio(
                     channels: asset.channels,
                     position: 0.0,
                     step,
-                    gain: sound_event_gain(&event) * MASTER_GAIN,
+                    gain: sound_event_gain(&event),
                 };
                 if let Ok(mut guard) = voices.lock() {
                     push_voice(&mut guard, voice);
@@ -235,8 +256,9 @@ fn render_audio(
         }
     }
 
+    let master = master_gain.clamp(0.0, 1.0);
     for sample in output.iter_mut() {
-        *sample = soft_clip(*sample).clamp(-1.0, 1.0);
+        *sample = soft_clip(*sample * master).clamp(-1.0, 1.0);
     }
 }
 
@@ -290,6 +312,14 @@ fn soft_clip(sample: f32) -> f32 {
     sample / (1.0 + sample.abs())
 }
 
+fn f32_to_bits(value: f32) -> u32 {
+    value.to_bits()
+}
+
+fn bits_to_f32(value: u32) -> f32 {
+    f32::from_bits(value)
+}
+
 fn push_voice(voices: &mut Vec<Voice>, voice: Voice) {
     if voices.len() >= MAX_VOICES {
         voices.remove(0);
@@ -323,5 +353,11 @@ mod tests {
         assert_eq!(voices.len(), MAX_VOICES);
         assert!(voices.iter().any(|voice| voice.gain == 99.0));
         assert!(!voices.iter().any(|voice| voice.gain == 0.0));
+    }
+
+    #[test]
+    fn master_gain_bits_roundtrip() {
+        let value = 0.42;
+        assert_eq!(bits_to_f32(f32_to_bits(value)), value);
     }
 }

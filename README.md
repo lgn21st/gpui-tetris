@@ -14,6 +14,12 @@ A desktop Tetris built in Rust with `gpui`, targeting a fixed-size window on mac
 - Up: rotate clockwise
 - Space: hard drop
 - C: hold
+- Enter: start (title screen)
+- P: pause/resume
+- S: settings
+- M: mute/unmute SFX
+- +/-: adjust SFX volume
+- 0: reset settings
 
 ## Project Structure
 - `src/main.rs`: app entry point.
@@ -37,7 +43,7 @@ cargo clippy # lint
 Scores follow classic rules: 1/2/3/4 line clears award 40/100/300/1200 points, multiplied by (level + 1). Level increases every 10 lines. Soft drop awards 1 point per cell, hard drop awards 2 points per cell.
 
 ## Status
-The UI renders the board with active and ghost pieces, inputs (including hold) are wired, auto-drop ticking runs each frame, and pause/game-over overlays plus next/hold previews are shown. Soft drop acceleration is input-driven with a short grace window, and left/right movement uses DAS/ARR repeat logic. Rotation now uses SRS kick tables for I/J/L/S/T/Z pieces. Level speed follows a stepped curve and line clears briefly pause gravity with a flash effect; game over adds a red tint overlay and hides active/ghost pieces during line-clear pause. Lock delay resets are limited while grounded to prevent infinite stalling, with a pulsing lock-warning flash near expiry, a lock-delay bar in the HUD, and a landing spark highlight on lock. Combos, back-to-back bonuses, and T-spin detection/scoring (full vs mini) are included with a HUD indicator when B2B is active. Paused state ignores gameplay inputs. Sound events are emitted and, if `assets/sfx/` contains matching WAVs, played through the cpal mixer.
+The UI renders the board with active and ghost pieces, inputs (including hold) are wired, auto-drop ticking runs each frame, and title/pause/game-over overlays plus next/hold previews are shown. Soft drop acceleration is input-driven with a short grace window, and left/right movement uses DAS/ARR repeat logic. Rotation uses SRS kick tables for I/J/L/S/T/Z pieces. Level speed follows a stepped curve and line clears briefly pause gravity with a flash effect; game over adds a red tint overlay and hides active/ghost pieces during line-clear pause. Lock delay resets are limited while grounded to prevent infinite stalling, with a pulsing lock-warning flash near expiry, a lock-delay bar in the HUD, and a landing spark highlight on lock. The default ruleset is classic line scoring; modern combo/B2B/T-spin scoring is available by switching the ruleset. Paused state ignores gameplay inputs, and focus loss auto-pauses. Sound events are emitted and, if `assets/sfx/` contains matching WAVs, played through the cpal mixer. Basic settings (SFX volume/mute/reset) are available in-game.
 
 SFX file names:
 `move.wav`, `rotate.wav`, `soft_drop.wav`, `hard_drop.wav`, `hold.wav`,

@@ -1,7 +1,7 @@
 use gpui::{
     actions, div, px, rgb, size, Action, App, Application, Bounds, Context, Entity, FocusHandle,
-    IntoElement, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, Render, SystemMenuType,
-    Window, WindowBounds, WindowOptions, prelude::*,
+    IntoElement, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, Render,
+    SystemMenuType, Window, WindowBounds, WindowOptions, prelude::*,
 };
 
 use gpui_tetris::audio::AudioEngine;
@@ -19,6 +19,8 @@ const BOARD_COLS: f32 = 10.0;
 const BOARD_ROWS: f32 = 20.0;
 const PADDING: f32 = 16.0;
 const GAP: f32 = 16.0;
+const DEFAULT_SFX_VOLUME: f32 = 0.7;
+const SFX_VOLUME_STEP: f32 = 0.1;
 
 actions!(
     tetris,
@@ -111,6 +113,11 @@ struct TetrisView {
     right_repeat: RepeatState,
     last_dir: Option<Direction>,
     audio: Option<AudioEngine>,
+    started: bool,
+    show_settings: bool,
+    sfx_volume: f32,
+    sfx_muted: bool,
+    was_focused: bool,
 }
 
 impl TetrisView {
@@ -120,8 +127,7 @@ impl TetrisView {
         let panel_width = WINDOW_WIDTH - board_width - (PADDING * 2.0) - GAP;
         let state = GameState::new(1, GameConfig::default());
         let focus_handle = cx.focus_handle();
-
-        Self {
+        let mut view = Self {
             board_width,
             board_height,
             panel_width,
@@ -134,16 +140,30 @@ impl TetrisView {
             right_repeat: RepeatState::new(),
             last_dir: None,
             audio,
-        }
+            started: false,
+            show_settings: false,
+            sfx_volume: DEFAULT_SFX_VOLUME,
+            sfx_muted: false,
+            was_focused: true,
+        };
+        view.apply_audio_volume();
+
+        view
     }
 }
 
 impl Render for TetrisView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let now = Instant::now();
+        let focused = self.focus_handle.is_focused(window);
+        if self.was_focused && !focused {
+            self.handle_focus_lost();
+        }
+        self.was_focused = focused;
+
         if let Some(prev) = self.last_tick {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
-            if elapsed_ms > 0 {
+            if elapsed_ms > 0 && self.started && !self.show_settings {
                 self.state.tick(elapsed_ms, false);
                 self.apply_repeats(elapsed_ms);
             }
@@ -204,6 +224,7 @@ impl Render for TetrisView {
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(Self::on_key_down))
             .on_key_up(cx.listener(Self::on_key_up))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .child(
                 div()
                     .flex()
@@ -221,7 +242,15 @@ impl Render for TetrisView {
                             .child(render_line_clear_flash(self.state.line_clear_timer_ms > 0))
                             .child(render_lock_warning(self.state.lock_warning_intensity()))
                             .child(render_game_over_tint(self.state.game_over))
-                            .child(render_overlay(self.state.paused, self.state.game_over)),
+                            .child(render_overlay(
+                                self.started,
+                                self.show_settings,
+                                self.state.paused,
+                                self.state.game_over,
+                                focused,
+                                self.sfx_volume_label(),
+                                self.sfx_muted,
+                            )),
                     )
                     .child(
                         div()
@@ -256,14 +285,9 @@ impl Render for TetrisView {
                                     .child(format!("Lines: {}", self.state.lines))
                                     .child(format!(
                                         "Status: {}",
-                                        if self.state.game_over {
-                                            "Game Over"
-                                        } else if self.state.paused {
-                                            "Paused"
-                                        } else {
-                                            "Playing"
-                                        }
+                                        self.status_label()
                                     ))
+                                    .child(format!("Rules: {}", self.ruleset_label()))
                                     .child(format!(
                                         "Hold: {}",
                                         if self.state.can_hold {
@@ -281,25 +305,34 @@ impl Render for TetrisView {
                                         self.state.lock_reset_remaining(),
                                         self.state.lock_reset_limit
                                     ))
-                                    .child(format!(
-                                        "Combo: {}",
-                                        if self.state.combo >= 0 {
-                                            self.state.combo.to_string()
-                                        } else {
-                                            "-".to_string()
-                                        }
-                                    ))
-                                    .child(format!(
-                                        "B2B: {}",
-                                        if self.state.back_to_back { "Yes" } else { "No" }
-                                    ))
-                                    .child(if self.state.back_to_back {
-                                        div()
-                                            .text_sm()
-                                            .text_color(rgb(0xfacc15))
-                                            .child("B2B bonus active")
-                                    } else {
+                                    .child(format!("SFX: {}", self.sfx_volume_label()))
+                                    .child(if self.state.is_classic_ruleset() {
                                         div().hidden()
+                                    } else {
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(format!(
+                                                "Combo: {}",
+                                                if self.state.combo >= 0 {
+                                                    self.state.combo.to_string()
+                                                } else {
+                                                    "-".to_string()
+                                                }
+                                            ))
+                                            .child(format!(
+                                                "B2B: {}",
+                                                if self.state.back_to_back { "Yes" } else { "No" }
+                                            ))
+                                            .child(if self.state.back_to_back {
+                                                div()
+                                                    .text_sm()
+                                                    .text_color(rgb(0xfacc15))
+                                                    .child("B2B bonus active")
+                                            } else {
+                                                div().hidden()
+                                            })
                                     })
                                     .child(render_lock_bar(
                                         self.state.lock_timer_ms,
@@ -432,23 +465,58 @@ enum Direction {
 }
 
 impl TetrisView {
-    fn on_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, _cx: &mut Context<Self>) {
+    fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, _cx: &mut Context<Self>) {
         match event.keystroke.key.as_str() {
+            "enter" | "return" => {
+                if !self.started {
+                    self.start_game();
+                }
+            }
+            "s" => {
+                self.toggle_settings();
+            }
+            "m" => {
+                self.toggle_mute();
+            }
+            "-" => {
+                self.adjust_volume(-SFX_VOLUME_STEP);
+            }
+            "=" | "+" => {
+                self.adjust_volume(SFX_VOLUME_STEP);
+            }
+            "0" => {
+                self.reset_settings();
+            }
+            "escape" => {
+                if self.show_settings {
+                    self.show_settings = false;
+                }
+            }
             "left" => {
+                if !self.can_accept_game_input() {
+                    return;
+                }
                 if self.left_repeat.press() {
-                    self.state.apply_action(GameAction::MoveLeft);
+                    self.handle_action(GameAction::MoveLeft);
                     self.last_action = Some(GameAction::MoveLeft);
                 }
                 self.last_dir = Some(Direction::Left);
             }
             "right" => {
+                if !self.can_accept_game_input() {
+                    return;
+                }
                 if self.right_repeat.press() {
-                    self.state.apply_action(GameAction::MoveRight);
+                    self.handle_action(GameAction::MoveRight);
                     self.last_action = Some(GameAction::MoveRight);
                 }
                 self.last_dir = Some(Direction::Right);
             }
             _ => {}
+        }
+
+        if !self.focus_handle.is_focused(window) {
+            self.focus_handle.focus(window);
         }
     }
 
@@ -460,7 +528,22 @@ impl TetrisView {
         }
     }
 
+    fn on_mouse_down(
+        &mut self,
+        _event: &gpui::MouseDownEvent,
+        window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) {
+        self.focus_handle.focus(window);
+    }
+
     fn apply_repeats(&mut self, elapsed_ms: u64) {
+        if !self.can_accept_game_input() {
+            self.left_repeat.release();
+            self.right_repeat.release();
+            self.last_dir = None;
+            return;
+        }
         let direction = match (self.left_repeat.is_held(), self.right_repeat.is_held()) {
             (true, false) => Some(Direction::Left),
             (false, true) => Some(Direction::Right),
@@ -472,7 +555,7 @@ impl TetrisView {
             Some(Direction::Left) => {
                 let count = self.left_repeat.tick(elapsed_ms, &self.repeat_config);
                 for _ in 0..count {
-                    self.state.apply_action(GameAction::MoveLeft);
+                    self.handle_action(GameAction::MoveLeft);
                 }
                 if count > 0 {
                     self.last_action = Some(GameAction::MoveLeft);
@@ -481,7 +564,7 @@ impl TetrisView {
             Some(Direction::Right) => {
                 let count = self.right_repeat.tick(elapsed_ms, &self.repeat_config);
                 for _ in 0..count {
-                    self.state.apply_action(GameAction::MoveRight);
+                    self.handle_action(GameAction::MoveRight);
                 }
                 if count > 0 {
                     self.last_action = Some(GameAction::MoveRight);
@@ -499,10 +582,183 @@ impl TetrisView {
             }
         }
     }
+
+    fn handle_action(&mut self, action: GameAction) {
+        if !self.started {
+            if matches!(action, GameAction::Restart | GameAction::HardDrop) {
+                self.start_game();
+            }
+            return;
+        }
+        if self.show_settings {
+            return;
+        }
+
+        self.state.apply_action(action);
+        if action == GameAction::Restart {
+            self.started = true;
+        }
+    }
+
+    fn start_game(&mut self) {
+        self.started = true;
+        self.show_settings = false;
+        self.state.reset();
+        self.state.paused = false;
+    }
+
+    fn toggle_settings(&mut self) {
+        self.show_settings = !self.show_settings;
+        if self.show_settings && !self.state.game_over {
+            self.state.paused = true;
+        }
+    }
+
+    fn toggle_mute(&mut self) {
+        self.sfx_muted = !self.sfx_muted;
+        self.apply_audio_volume();
+    }
+
+    fn adjust_volume(&mut self, delta: f32) {
+        if self.sfx_muted {
+            self.sfx_muted = false;
+        }
+        self.sfx_volume = (self.sfx_volume + delta).clamp(0.0, 1.0);
+        self.apply_audio_volume();
+    }
+
+    fn reset_settings(&mut self) {
+        self.sfx_muted = false;
+        self.sfx_volume = DEFAULT_SFX_VOLUME;
+        self.apply_audio_volume();
+    }
+
+    fn apply_audio_volume(&mut self) {
+        if let Some(audio) = &self.audio {
+            let volume = if self.sfx_muted { 0.0 } else { self.sfx_volume };
+            audio.set_master_gain(volume);
+        }
+    }
+
+    fn can_accept_game_input(&self) -> bool {
+        self.started && !self.show_settings && !self.state.paused && !self.state.game_over
+    }
+
+    fn handle_focus_lost(&mut self) {
+        self.left_repeat.release();
+        self.right_repeat.release();
+        self.last_dir = None;
+        if self.started && !self.state.game_over {
+            self.state.paused = true;
+        }
+    }
+
+    fn status_label(&self) -> &'static str {
+        if !self.started {
+            "Title"
+        } else if self.state.game_over {
+            "Game Over"
+        } else if self.show_settings {
+            "Settings"
+        } else if self.state.paused {
+            "Paused"
+        } else {
+            "Playing"
+        }
+    }
+
+    fn ruleset_label(&self) -> &'static str {
+        if self.state.is_classic_ruleset() {
+            "Classic"
+        } else {
+            "Modern"
+        }
+    }
+
+    fn sfx_volume_label(&self) -> String {
+        if self.sfx_muted {
+            "Muted".to_string()
+        } else {
+            format!("{:.0}%", self.sfx_volume * 100.0)
+        }
+    }
 }
-fn render_overlay(paused: bool, game_over: bool) -> impl IntoElement {
+fn render_overlay(
+    started: bool,
+    show_settings: bool,
+    paused: bool,
+    game_over: bool,
+    focused: bool,
+    sfx_label: String,
+    muted: bool,
+) -> impl IntoElement {
+    if show_settings {
+        return div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .bg(rgb(0x000000))
+            .opacity(0.86)
+            .flex()
+            .flex_col()
+            .gap_2()
+            .justify_center()
+            .items_center()
+            .text_xl()
+            .text_color(rgb(0xf5f5f5))
+            .child("Settings")
+            .child(
+                div()
+                    .text_sm()
+                    .child(format!("SFX Volume: {}{}", sfx_label, if muted { " (M)" } else { "" })),
+            )
+            .child(div().text_sm().child("M: mute · +/-: volume · 0: reset"))
+            .child(div().text_sm().child("S or Esc: back"));
+    }
+
+    if !started {
+        return div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .bg(rgb(0x000000))
+            .opacity(0.86)
+            .flex()
+            .flex_col()
+            .gap_2()
+            .justify_center()
+            .items_center()
+            .text_xl()
+            .text_color(rgb(0xf5f5f5))
+            .child("gpui‑tetris")
+            .child(div().text_sm().child("Press Enter or Space to Start"))
+            .child(div().text_sm().child("S: Settings"));
+    }
+
     if !paused && !game_over {
-        return div().hidden();
+        if focused {
+            return div().hidden();
+        }
+        return div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .bg(rgb(0x000000))
+            .opacity(0.78)
+            .flex()
+            .flex_col()
+            .gap_2()
+            .justify_center()
+            .items_center()
+            .text_xl()
+            .text_color(rgb(0xf5f5f5))
+            .child("Click to Focus");
     }
 
     let label = if game_over { "Game Over" } else { "Paused" };
@@ -617,7 +873,7 @@ fn register_action<A: Action + 'static>(
     cx.on_action(move |_: &A, cx| {
         view.update(cx, |view, cx| {
             view.last_action = Some(action);
-            view.state.apply_action(action);
+            view.handle_action(action);
             cx.notify();
         });
     });

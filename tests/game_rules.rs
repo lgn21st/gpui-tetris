@@ -77,5 +77,5 @@ fn apply_line_clear_updates_score_and_level() {
     state.apply_line_clear(1, TSpinKind::None);
     assert_eq!(state.lines, 10);
     assert_eq!(state.level, 1);
-    assert_eq!(state.score, 130);
+    assert_eq!(state.score, 80);
 }

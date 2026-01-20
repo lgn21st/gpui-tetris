@@ -75,8 +75,9 @@ PRs should include:
 - Default lock delay is 450ms; line clear pause is 180ms.
 - Sound events are emitted for moves, drops, line clears, holds, and game over and played if WAVs are present under `assets/sfx/` with per-event gain and soft clipping.
 - HUD shows hold availability plus grounded/lock-reset remaining status.
-- Combos, back-to-back bonuses, and T-spin scoring (full vs mini) are enabled, with a HUD cue when B2B is active.
+- Classic ruleset is default; modern combo/B2B/T-spin scoring is available by switching rulesets.
 - Rotation uses SRS kick tables for I/J/L/S/T/Z.
+- Title/settings overlays are shown; focus loss auto-pauses; in-game settings expose SFX volume/mute/reset.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions
