@@ -1,3 +1,4 @@
+use gilrs::{Axis, Button, EventType, Gilrs, GamepadId};
 use gpui::{
     actions, div, px, rgb, size, Action, App, Application, Bounds, Context, Entity, FocusHandle,
     IntoElement, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, Render,
@@ -29,6 +30,7 @@ const MIN_SCALE: f32 = 0.6;
 const BASE_PANEL_TEXT: f32 = 12.0;
 const BASE_TITLE_TEXT: f32 = 24.0;
 const BASE_HINT_TEXT: f32 = 14.0;
+const CONTROLLER_AXIS_THRESHOLD: f32 = 0.5;
 
 actions!(
     tetris,
@@ -147,8 +149,12 @@ struct TetrisView {
     last_tick: Option<Instant>,
     focus_handle: FocusHandle,
     repeat_config: RepeatConfig,
+    soft_drop_repeat_config: RepeatConfig,
     left_repeat: RepeatState,
     right_repeat: RepeatState,
+    down_repeat: RepeatState,
+    keyboard_left_held: bool,
+    keyboard_right_held: bool,
     last_dir: Option<Direction>,
     audio: Option<AudioEngine>,
     started: bool,
@@ -156,20 +162,39 @@ struct TetrisView {
     sfx_volume: f32,
     sfx_muted: bool,
     was_focused: bool,
+    gilrs: Option<Gilrs>,
+    gamepad_id: Option<GamepadId>,
+    controller_left_button: bool,
+    controller_right_button: bool,
+    controller_down_button: bool,
+    controller_left_axis: bool,
+    controller_right_axis: bool,
+    controller_down_axis: bool,
+    controller_left_held: bool,
+    controller_right_held: bool,
+    controller_down_held: bool,
 }
 
 impl TetrisView {
     fn new(cx: &mut Context<Self>, audio: Option<AudioEngine>) -> Self {
         let state = GameState::new(1, GameConfig::default());
         let focus_handle = cx.focus_handle();
+        let gilrs = Gilrs::new().ok();
+        let gamepad_id = gilrs
+            .as_ref()
+            .and_then(|gilrs| gilrs.gamepads().next().map(|(id, _)| id));
         let mut view = Self {
             last_action: None,
             state,
             last_tick: None,
             focus_handle,
             repeat_config: RepeatConfig::default(),
+            soft_drop_repeat_config: RepeatConfig { das_ms: 0, arr_ms: 50 },
             left_repeat: RepeatState::new(),
             right_repeat: RepeatState::new(),
+            down_repeat: RepeatState::new(),
+            keyboard_left_held: false,
+            keyboard_right_held: false,
             last_dir: None,
             audio,
             started: false,
@@ -177,6 +202,17 @@ impl TetrisView {
             sfx_volume: DEFAULT_SFX_VOLUME,
             sfx_muted: false,
             was_focused: true,
+            gilrs,
+            gamepad_id,
+            controller_left_button: false,
+            controller_right_button: false,
+            controller_down_button: false,
+            controller_left_axis: false,
+            controller_right_axis: false,
+            controller_down_axis: false,
+            controller_left_held: false,
+            controller_right_held: false,
+            controller_down_held: false,
         };
         view.apply_audio_volume();
 
@@ -200,6 +236,7 @@ impl Render for TetrisView {
             self.handle_focus_lost();
         }
         self.was_focused = focused;
+        self.poll_controller();
 
         if let Some(prev) = self.last_tick {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
@@ -544,21 +581,15 @@ impl TetrisView {
                 if !self.can_accept_game_input() {
                     return;
                 }
-                if self.left_repeat.press() {
-                    self.handle_action(GameAction::MoveLeft);
-                    self.last_action = Some(GameAction::MoveLeft);
-                }
-                self.last_dir = Some(Direction::Left);
+                self.keyboard_left_held = true;
+                self.sync_movement_holds();
             }
             "right" => {
                 if !self.can_accept_game_input() {
                     return;
                 }
-                if self.right_repeat.press() {
-                    self.handle_action(GameAction::MoveRight);
-                    self.last_action = Some(GameAction::MoveRight);
-                }
-                self.last_dir = Some(Direction::Right);
+                self.keyboard_right_held = true;
+                self.sync_movement_holds();
             }
             _ => {}
         }
@@ -570,8 +601,14 @@ impl TetrisView {
 
     fn on_key_up(&mut self, event: &KeyUpEvent, _window: &mut Window, _cx: &mut Context<Self>) {
         match event.keystroke.key.as_str() {
-            "left" => self.left_repeat.release(),
-            "right" => self.right_repeat.release(),
+            "left" => {
+                self.keyboard_left_held = false;
+                self.sync_movement_holds();
+            }
+            "right" => {
+                self.keyboard_right_held = false;
+                self.sync_movement_holds();
+            }
             _ => {}
         }
     }
@@ -585,10 +622,165 @@ impl TetrisView {
         self.focus_handle.focus(window);
     }
 
+    fn poll_controller(&mut self) {
+        let events = {
+            let Some(gilrs) = self.gilrs.as_mut() else {
+                return;
+            };
+            let mut events = Vec::new();
+            while let Some(event) = gilrs.next_event() {
+                events.push(event);
+            }
+            events
+        };
+
+        for event in events {
+            if self.gamepad_id.is_none() {
+                self.gamepad_id = Some(event.id);
+            }
+
+            if let Some(active) = self.gamepad_id {
+                if event.id != active {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            match event.event {
+                EventType::Connected => {}
+                EventType::Disconnected => {
+                    if self.gamepad_id == Some(event.id) {
+                        self.clear_controller_state();
+                        self.gamepad_id = None;
+                    }
+                }
+                EventType::ButtonPressed(button, _) => {
+                    self.handle_controller_button(button, true);
+                }
+                EventType::ButtonReleased(button, _) => {
+                    self.handle_controller_button(button, false);
+                }
+                EventType::AxisChanged(axis, value, _) => {
+                    self.handle_controller_axis(axis, value);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn handle_controller_button(&mut self, button: Button, pressed: bool) {
+        match button {
+            Button::DPadLeft => self.controller_left_button = pressed,
+            Button::DPadRight => self.controller_right_button = pressed,
+            Button::DPadDown => self.controller_down_button = pressed,
+            Button::South if pressed => self.handle_action(GameAction::RotateCw),
+            Button::East if pressed => self.handle_action(GameAction::RotateCcw),
+            Button::West if pressed => self.handle_action(GameAction::Hold),
+            Button::North if pressed => self.handle_action(GameAction::HardDrop),
+            Button::Start if pressed => self.handle_action(GameAction::Pause),
+            Button::Select | Button::Mode if pressed => self.handle_action(GameAction::Restart),
+            _ => {}
+        }
+
+        self.sync_controller_holds();
+    }
+
+    fn handle_controller_axis(&mut self, axis: Axis, value: f32) {
+        match axis {
+            Axis::LeftStickX => {
+                self.controller_left_axis = value < -CONTROLLER_AXIS_THRESHOLD;
+                self.controller_right_axis = value > CONTROLLER_AXIS_THRESHOLD;
+            }
+            Axis::LeftStickY => {
+                self.controller_down_axis = value > CONTROLLER_AXIS_THRESHOLD;
+            }
+            _ => {}
+        }
+
+        self.sync_controller_holds();
+    }
+
+    fn sync_movement_holds(&mut self) {
+        let left = self.keyboard_left_held || self.controller_left_held;
+        let right = self.keyboard_right_held || self.controller_right_held;
+
+        if left != self.left_repeat.is_held() {
+            if left {
+                if self.left_repeat.press() {
+                    self.handle_action(GameAction::MoveLeft);
+                    self.last_action = Some(GameAction::MoveLeft);
+                }
+            } else {
+                self.left_repeat.release();
+            }
+        }
+
+        if right != self.right_repeat.is_held() {
+            if right {
+                if self.right_repeat.press() {
+                    self.handle_action(GameAction::MoveRight);
+                    self.last_action = Some(GameAction::MoveRight);
+                }
+            } else {
+                self.right_repeat.release();
+            }
+        }
+
+        match (left, right) {
+            (true, false) => self.last_dir = Some(Direction::Left),
+            (false, true) => self.last_dir = Some(Direction::Right),
+            (false, false) => self.last_dir = None,
+            (true, true) => {}
+        }
+    }
+
+    fn sync_controller_holds(&mut self) {
+        let left = self.controller_left_button || self.controller_left_axis;
+        let right = self.controller_right_button || self.controller_right_axis;
+        let down = self.controller_down_button || self.controller_down_axis;
+
+        if left != self.controller_left_held {
+            self.controller_left_held = left;
+        }
+
+        if right != self.controller_right_held {
+            self.controller_right_held = right;
+        }
+        self.sync_movement_holds();
+
+        if down != self.controller_down_held {
+            self.controller_down_held = down;
+            if down {
+                if self.down_repeat.press() {
+                    self.handle_action(GameAction::SoftDrop);
+                    self.last_action = Some(GameAction::SoftDrop);
+                }
+            } else {
+                self.down_repeat.release();
+            }
+        }
+    }
+
+    fn clear_controller_state(&mut self) {
+        self.controller_left_button = false;
+        self.controller_right_button = false;
+        self.controller_down_button = false;
+        self.controller_left_axis = false;
+        self.controller_right_axis = false;
+        self.controller_down_axis = false;
+        self.controller_left_held = false;
+        self.controller_right_held = false;
+        self.controller_down_held = false;
+        self.down_repeat.release();
+        self.sync_movement_holds();
+    }
+
     fn apply_repeats(&mut self, elapsed_ms: u64) {
         if !self.can_accept_game_input() {
             self.left_repeat.release();
             self.right_repeat.release();
+            self.down_repeat.release();
             self.last_dir = None;
             return;
         }
@@ -619,6 +811,18 @@ impl TetrisView {
                 }
             }
             None => {}
+        }
+
+        if self.down_repeat.is_held() {
+            let count = self
+                .down_repeat
+                .tick(elapsed_ms, &self.soft_drop_repeat_config);
+            for _ in 0..count {
+                self.handle_action(GameAction::SoftDrop);
+            }
+            if count > 0 {
+                self.last_action = Some(GameAction::SoftDrop);
+            }
         }
     }
 
@@ -693,9 +897,9 @@ impl TetrisView {
     }
 
     fn handle_focus_lost(&mut self) {
-        self.left_repeat.release();
-        self.right_repeat.release();
-        self.last_dir = None;
+        self.keyboard_left_held = false;
+        self.keyboard_right_held = false;
+        self.clear_controller_state();
         if self.started && !self.state.game_over {
             self.state.paused = true;
         }

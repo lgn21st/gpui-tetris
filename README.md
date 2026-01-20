@@ -24,6 +24,17 @@ A desktop Tetris built in Rust with `gpui`, targeting macOS (MacBook Air M2 test
 - 0: reset settings
 - Cmd+Ctrl+F: toggle fullscreen
 
+### Xbox Controller (macOS, Bluetooth)
+Default mapping:
+- D-pad / Left Stick: move
+- Down: soft drop
+- A: rotate clockwise
+- B: rotate counter-clockwise
+- X: hold
+- Y: hard drop
+- Start: pause/resume
+- Select/Back: restart
+
 ## Project Structure
 - `src/main.rs`: app entry point.
 - `src/ui/`: gpui window setup and rendering.
