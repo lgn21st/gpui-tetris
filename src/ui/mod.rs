@@ -154,6 +154,11 @@ impl Render for TetrisView {
 
         let show_active = !self.state.is_line_clear_active();
         let mut active_cells = Vec::new();
+        let landing_cells = if self.state.landing_flash_active() {
+            self.state.last_lock_cells
+        } else {
+            [(0, 0); 4]
+        };
         let ghost_cells = if show_active {
             let active_blocks = self.state.active.blocks(self.state.active.rotation);
             active_cells = Vec::with_capacity(4);
@@ -171,6 +176,12 @@ impl Render for TetrisView {
             for x in 0..BOARD_COLS as i32 {
                 let mut cell_kind = self.state.board.cells[y as usize][x as usize].kind;
                 let mut is_ghost = false;
+                let mut is_flash = false;
+                if self.state.landing_flash_active()
+                    && landing_cells.iter().any(|(lx, ly)| *lx == x && *ly == y)
+                {
+                    is_flash = true;
+                }
                 if show_active && active_cells.iter().any(|(ax, ay)| *ax == x && *ay == y) {
                     cell_kind = Some(self.state.active.kind);
                 } else if show_active && ghost_cells.iter().any(|(gx, gy)| *gx == x && *gy == y)
@@ -179,7 +190,7 @@ impl Render for TetrisView {
                     is_ghost = true;
                 }
 
-                row = row.child(render_cell(cell_kind, is_ghost));
+                row = row.child(render_cell(cell_kind, is_ghost, is_flash));
             }
             rows.push(row);
         }
@@ -208,6 +219,7 @@ impl Render for TetrisView {
                             .relative()
                             .child(div().flex().flex_col().children(rows))
                             .child(render_line_clear_flash(self.state.line_clear_timer_ms > 0))
+                            .child(render_lock_warning(self.state.lock_warning_active()))
                             .child(render_game_over_tint(self.state.game_over))
                             .child(render_overlay(self.state.paused, self.state.game_over)),
                     )
@@ -268,6 +280,18 @@ impl Render for TetrisView {
                                         "Lock resets: {}/{}",
                                         self.state.lock_reset_remaining(),
                                         self.state.lock_reset_limit
+                                    ))
+                                    .child(format!(
+                                        "Combo: {}",
+                                        if self.state.combo >= 0 {
+                                            self.state.combo.to_string()
+                                        } else {
+                                            "-".to_string()
+                                        }
+                                    ))
+                                    .child(format!(
+                                        "B2B: {}",
+                                        if self.state.back_to_back { "Yes" } else { "No" }
                                     )),
                             )
                             .child(
@@ -305,7 +329,7 @@ fn action_label(action: &GameAction) -> &'static str {
     }
 }
 
-fn render_cell(kind: Option<TetrominoType>, ghost: bool) -> impl IntoElement {
+fn render_cell(kind: Option<TetrominoType>, ghost: bool, flash: bool) -> impl IntoElement {
     let color = match kind {
         Some(TetrominoType::I) => rgb(0x4fd1c5),
         Some(TetrominoType::O) => rgb(0xf6e05e),
@@ -321,13 +345,14 @@ fn render_cell(kind: Option<TetrominoType>, ghost: bool) -> impl IntoElement {
     } else {
         color
     };
+    let border = if flash { rgb(0xfef3c7) } else { rgb(0x2a2a2a) };
 
     div()
         .w(px(CELL_SIZE))
         .h(px(CELL_SIZE))
         .bg(fill)
         .border(px(1.0))
-        .border_color(rgb(0x2a2a2a))
+        .border_color(border)
 }
 
 fn render_preview(kind: Option<&TetrominoType>) -> impl IntoElement {
@@ -521,6 +546,21 @@ fn render_game_over_tint(active: bool) -> impl IntoElement {
         .bottom_0()
         .bg(rgb(0x3a0f0f))
         .opacity(0.28)
+}
+
+fn render_lock_warning(active: bool) -> impl IntoElement {
+    if !active {
+        return div().hidden();
+    }
+
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .bg(rgb(0x7a1c1c))
+        .opacity(0.18)
 }
 fn register_action<A: Action + 'static>(
     cx: &mut App,

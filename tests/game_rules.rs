@@ -68,14 +68,14 @@ fn apply_line_clear_updates_score_and_level() {
     let config = GameConfig::default();
     let mut state = GameState::new(1, config);
 
-    state.apply_line_clear(1);
+    state.apply_line_clear(1, false);
     assert_eq!(state.lines, 1);
     assert_eq!(state.score, 40);
     assert_eq!(state.level, 0);
 
     state.lines = 9;
-    state.apply_line_clear(1);
+    state.apply_line_clear(1, false);
     assert_eq!(state.lines, 10);
     assert_eq!(state.level, 1);
-    assert_eq!(state.score, 80);
+    assert_eq!(state.score, 130);
 }

@@ -19,7 +19,7 @@ fn soft_drop_awards_point_per_cell() {
 #[test]
 fn line_clear_sets_timer() {
     let mut state = GameState::new(6, GameConfig::default());
-    state.apply_line_clear(1);
+    state.apply_line_clear(1, false);
     assert!(state.line_clear_timer_ms > 0);
 }
 

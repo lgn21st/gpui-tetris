@@ -27,3 +27,23 @@ fn grounded_state_tracks_piece_support() {
     state.active = Tetromino::new(TetrominoType::O, 4, BOARD_HEIGHT as i32 - 2);
     assert!(state.is_grounded());
 }
+
+#[test]
+fn lock_warning_triggers_near_delay() {
+    let mut state = GameState::new(4, GameConfig::default());
+    state.lock_delay_ms = 1000;
+    state.lock_timer_ms = 600;
+    state.active = Tetromino::new(TetrominoType::O, 4, BOARD_HEIGHT as i32 - 2);
+    assert!(!state.lock_warning_active());
+
+    state.lock_timer_ms = 700;
+    assert!(state.lock_warning_active());
+}
+
+#[test]
+fn landing_flash_tracks_timer() {
+    let mut state = GameState::new(5, GameConfig::default());
+    assert!(!state.landing_flash_active());
+    state.landing_flash_timer_ms = 10;
+    assert!(state.landing_flash_active());
+}

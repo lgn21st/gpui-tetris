@@ -23,7 +23,7 @@ fn emits_sound_events_for_actions() {
 #[test]
 fn emits_line_clear_sound() {
     let mut state = GameState::new(2, GameConfig::default());
-    state.apply_line_clear(2);
+    state.apply_line_clear(2, false);
     let events = state.take_sound_events();
     assert!(events.contains(&SoundEvent::LineClear(2)));
 }

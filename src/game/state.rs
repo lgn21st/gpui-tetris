@@ -48,6 +48,8 @@ pub struct GameState {
     pub score: u32,
     pub level: u32,
     pub lines: u32,
+    pub combo: i32,
+    pub back_to_back: bool,
     pub game_over: bool,
     pub paused: bool,
     pub tick_ms: u64,
@@ -62,7 +64,10 @@ pub struct GameState {
     pub drop_timer_ms: u64,
     pub lock_timer_ms: u64,
     pub line_clear_timer_ms: u64,
+    pub landing_flash_timer_ms: u64,
+    pub last_lock_cells: [(i32, i32); 4],
     sound_events: Vec<SoundEvent>,
+    last_action_rotate: bool,
     rng: SimpleRng,
 }
 
@@ -86,6 +91,8 @@ impl GameState {
             score: 0,
             level: 0,
             lines: 0,
+            combo: -1,
+            back_to_back: false,
             game_over: false,
             paused: false,
             tick_ms: config.tick_ms,
@@ -100,7 +107,10 @@ impl GameState {
             drop_timer_ms: 0,
             lock_timer_ms: 0,
             line_clear_timer_ms: 0,
+            landing_flash_timer_ms: 0,
+            last_lock_cells: [(0, 0); 4],
             sound_events: Vec::new(),
+            last_action_rotate: false,
             rng,
         }
     }
@@ -114,6 +124,7 @@ impl GameState {
         self.active.rotation = Rotation::North;
         self.can_hold = true;
         self.lock_reset_count = 0;
+        self.last_action_rotate = false;
 
         if !self.board.can_place(&self.active, self.active.x, self.active.y, self.active.rotation) {
             self.game_over = true;
@@ -121,26 +132,51 @@ impl GameState {
         }
     }
 
-    pub fn apply_line_clear(&mut self, cleared: usize) {
-        if cleared == 0 {
-            return;
+    pub fn apply_line_clear(&mut self, cleared: usize, t_spin: bool) {
+        let qualifies_b2b = t_spin && cleared > 0 || cleared == 4;
+        let level = self.level + 1;
+        let mut points = if t_spin {
+            match cleared {
+                0 => 100,
+                1 => 800,
+                2 => 1200,
+                3 => 1600,
+                _ => 0,
+            }
+        } else {
+            match cleared {
+                1 => 40,
+                2 => 100,
+                3 => 300,
+                4 => 1200,
+                _ => 0,
+            }
+        };
+
+        if qualifies_b2b && self.back_to_back {
+            points = points * 3 / 2;
         }
 
-        self.line_clear_timer_ms = 180;
-        self.sound_events.push(SoundEvent::LineClear(cleared as u8));
-        self.lines += cleared as u32;
-        let level = self.level + 1;
-        let points = match cleared {
-            1 => 40,
-            2 => 100,
-            3 => 300,
-            4 => 1200,
-            _ => 0,
-        };
-        self.score += points * level;
+        if cleared > 0 {
+            self.line_clear_timer_ms = 180;
+            self.sound_events.push(SoundEvent::LineClear(cleared as u8));
+            self.lines += cleared as u32;
+            self.combo += 1;
+            if self.combo > 0 {
+                points += 50 * self.combo as u32;
+            }
+            self.back_to_back = qualifies_b2b;
 
-        // Classic progression: advance level every 10 lines.
-        self.level = self.lines / 10;
+            // Classic progression: advance level every 10 lines.
+            self.level = self.lines / 10;
+        } else {
+            self.combo = -1;
+            self.back_to_back = qualifies_b2b;
+        }
+
+        if points > 0 {
+            self.score += points * level;
+        }
     }
 
     pub fn is_lock_row(&self) -> bool {
@@ -173,6 +209,10 @@ impl GameState {
             return;
         }
 
+        if self.landing_flash_timer_ms > 0 {
+            self.landing_flash_timer_ms = self.landing_flash_timer_ms.saturating_sub(elapsed_ms);
+        }
+
         if self.line_clear_timer_ms > 0 {
             self.line_clear_timer_ms = self.line_clear_timer_ms.saturating_sub(elapsed_ms);
             if self.line_clear_timer_ms > 0 {
@@ -202,10 +242,7 @@ impl GameState {
             if self.lock_timer_ms >= self.lock_delay_ms {
                 self.lock_timer_ms = 0;
                 self.drop_timer_ms = 0;
-                self.board.lock_piece(&self.active);
-                let cleared = self.board.clear_lines();
-                self.apply_line_clear(cleared);
-                self.spawn_next();
+                self.lock_active_piece();
             }
         }
     }
@@ -221,10 +258,12 @@ impl GameState {
         match action {
             GameAction::MoveLeft => {
                 self.try_move(-1, 0);
+                self.last_action_rotate = false;
                 self.sound_events.push(SoundEvent::Move);
             }
             GameAction::MoveRight => {
                 self.try_move(1, 0);
+                self.last_action_rotate = false;
                 self.sound_events.push(SoundEvent::Move);
             }
             GameAction::SoftDrop => {
@@ -232,6 +271,7 @@ impl GameState {
                     self.score = self.score.saturating_add(1);
                 }
                 self.activate_soft_drop();
+                self.last_action_rotate = false;
                 self.sound_events.push(SoundEvent::SoftDrop);
             }
             GameAction::HardDrop => {
@@ -243,19 +283,16 @@ impl GameState {
                     self.score = self.score.saturating_add(dropped * 2);
                 }
                 self.sound_events.push(SoundEvent::HardDrop);
-                self.board.lock_piece(&self.active);
-                let cleared = self.board.clear_lines();
-                self.apply_line_clear(cleared);
-                self.spawn_next();
+                self.lock_active_piece();
                 self.lock_timer_ms = 0;
                 self.drop_timer_ms = 0;
             }
             GameAction::RotateCw => {
-                self.try_rotate(true);
+                self.last_action_rotate = self.try_rotate(true);
                 self.sound_events.push(SoundEvent::Rotate);
             }
             GameAction::RotateCcw => {
-                self.try_rotate(false);
+                self.last_action_rotate = self.try_rotate(false);
                 self.sound_events.push(SoundEvent::Rotate);
             }
             GameAction::Hold => {
@@ -272,6 +309,7 @@ impl GameState {
                     self.spawn_next();
                 }
                 self.can_hold = false;
+                self.last_action_rotate = false;
                 self.sound_events.push(SoundEvent::Hold);
             }
             GameAction::Pause => {
@@ -310,6 +348,17 @@ impl GameState {
 
     pub fn is_grounded(&self) -> bool {
         !self.can_move_down()
+    }
+
+    pub fn lock_warning_active(&self) -> bool {
+        if self.lock_delay_ms == 0 {
+            return false;
+        }
+        self.is_grounded() && self.lock_timer_ms >= (self.lock_delay_ms * 7 / 10)
+    }
+
+    pub fn landing_flash_active(&self) -> bool {
+        self.landing_flash_timer_ms > 0
     }
 
     pub fn reset(&mut self) {
@@ -419,6 +468,46 @@ impl GameState {
             self.lock_timer_ms = 0;
             self.lock_reset_count += 1;
         }
+    }
+
+    fn lock_active_piece(&mut self) {
+        let t_spin = self.is_t_spin();
+        self.set_landing_flash();
+        self.board.lock_piece(&self.active);
+        let cleared = self.board.clear_lines();
+        self.apply_line_clear(cleared, t_spin);
+        self.spawn_next();
+        self.last_action_rotate = false;
+    }
+
+    fn set_landing_flash(&mut self) {
+        let blocks = self.active.blocks(self.active.rotation);
+        for (index, (dx, dy)) in blocks.iter().enumerate() {
+            self.last_lock_cells[index] = (self.active.x + dx, self.active.y + dy);
+        }
+        self.landing_flash_timer_ms = 120;
+    }
+
+    fn is_t_spin(&self) -> bool {
+        if self.active.kind != TetrominoType::T || !self.last_action_rotate {
+            return false;
+        }
+
+        let center_x = self.active.x + 1;
+        let center_y = self.active.y + 1;
+        let corners = [
+            (center_x - 1, center_y - 1),
+            (center_x + 1, center_y - 1),
+            (center_x - 1, center_y + 1),
+            (center_x + 1, center_y + 1),
+        ];
+        let mut filled = 0;
+        for (x, y) in corners.iter() {
+            if self.board.is_occupied(*x, *y) {
+                filled += 1;
+            }
+        }
+        filled >= 3
     }
 }
 
