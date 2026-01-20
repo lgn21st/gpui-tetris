@@ -1,11 +1,13 @@
 # gpui-tetris
 
-A desktop Tetris built in Rust with `gpui`, targeting a fixed-size window on macOS (MacBook Air M2 tested). The UI is a simple two-panel layout: a 10x20 playfield and a side panel for next/hold/score.
+A desktop Tetris built in Rust with `gpui`, targeting macOS (MacBook Air M2 tested). The UI is a two-panel layout: a 10x20 playfield and a side panel for next/hold/score.
 
 ## Features
 - Resizable window with proportional scaling (base 480x720).
 - Classic Tetris rules and scoring.
 - Keyboard controls (arrow keys + space).
+- Title, settings, pause, and game-over overlays.
+- Fullscreen toggle (Cmd+Ctrl+F).
 - Optional stereo SFX playback via `assets/sfx/*.wav`.
 
 ## Controls

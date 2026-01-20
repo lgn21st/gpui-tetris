@@ -42,8 +42,7 @@ PRs should include:
 - UI: `gpui` for rendering, input, and window management.
 - Game loop: fixed tick update (e.g., 60 Hz) with drop timer.
 - State: immutable-ish core state in `game/`, UI reads state and dispatches actions.
-- Window: fixed-size 480x720 (10x20 board with side panel on MacBook Air M2).
-  - Resizable with proportional scaling around the 480x720 base size.
+- Window: resizable with proportional scaling around the 480x720 base size.
 
 ## Dependency Workarounds (TODO)
 - TODO: `gpui` and `zed-font-kit` are vendored under `vendor/` to align `core-graphics` 0.25 on macOS.
