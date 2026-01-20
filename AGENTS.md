@@ -60,7 +60,7 @@ PRs should include:
 ## Current Milestones
 - Inputs wired (arrows, space, `c`, `p`, `r`) with HUD status.
 - Tick logic and lock delay implemented in `GameState`, driven by per-frame updates.
-- Board renders active + ghost pieces with next/hold text.
+- Board renders active + ghost pieces with next/hold previews.
 - Pause/game-over overlay rendered on the board.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 

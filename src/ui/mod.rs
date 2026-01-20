@@ -5,7 +5,7 @@ use gpui::{
 };
 
 use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::TetrominoType;
+use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
 use std::time::Instant;
 
@@ -176,45 +176,56 @@ impl Render for TetrisView {
                             .bg(rgb(0x151515))
                             .border(px(1.0))
                             .border_color(rgb(0x2e2e2e))
-                            .p_2()
-                            .child(format!(
-                                "Last input: {}",
-                                self.last_action
-                                    .as_ref()
-                                    .map(action_label)
-                                    .unwrap_or("None")
-                            ))
-                            .child(format!("Score: {}", self.state.score))
-                            .child(format!("Level: {}", self.state.level))
-                            .child(format!("Lines: {}", self.state.lines))
-                            .child(format!(
-                                "Paused: {}",
-                                if self.state.paused { "Yes" } else { "No" }
-                            ))
-                            .child(format!(
-                                "Status: {}",
-                                if self.state.game_over {
-                                    "Game Over"
-                                } else {
-                                    "Playing"
-                                }
-                            ))
-                            .child(format!(
-                                "Hold: {}",
-                                self.state
-                                    .hold
-                                    .as_ref()
-                                    .map(piece_label)
-                                    .unwrap_or("None")
-                            ))
-                            .child(format!(
-                                "Next: {}",
-                                self.state
-                                    .next_queue
-                                    .first()
-                                    .map(piece_label)
-                                    .unwrap_or("None")
-                            )),
+                            .p_3()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .child(format!(
+                                        "Last input: {}",
+                                        self.last_action
+                                            .as_ref()
+                                            .map(action_label)
+                                            .unwrap_or("None")
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(format!("Score: {}", self.state.score))
+                                    .child(format!("Level: {}", self.state.level))
+                                    .child(format!("Lines: {}", self.state.lines))
+                                    .child(format!(
+                                        "Status: {}",
+                                        if self.state.game_over {
+                                            "Game Over"
+                                        } else if self.state.paused {
+                                            "Paused"
+                                        } else {
+                                            "Playing"
+                                        }
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(div().text_sm().child("Hold"))
+                                    .child(render_preview(self.state.hold.as_ref())),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(div().text_sm().child("Next"))
+                                    .child(render_preview(self.state.next_queue.first())),
+                            ),
                     ),
             )
     }
@@ -231,18 +242,6 @@ fn action_label(action: &GameAction) -> &'static str {
         GameAction::Hold => "Hold",
         GameAction::Pause => "Pause",
         GameAction::Restart => "Restart",
-    }
-}
-
-fn piece_label(kind: &TetrominoType) -> &'static str {
-    match kind {
-        TetrominoType::I => "I",
-        TetrominoType::O => "O",
-        TetrominoType::T => "T",
-        TetrominoType::S => "S",
-        TetrominoType::Z => "Z",
-        TetrominoType::J => "J",
-        TetrominoType::L => "L",
     }
 }
 
@@ -271,6 +270,62 @@ fn render_cell(kind: Option<TetrominoType>, ghost: bool) -> impl IntoElement {
         .border_color(rgb(0x2a2a2a))
 }
 
+fn render_preview(kind: Option<&TetrominoType>) -> impl IntoElement {
+    const PREVIEW_SIZE: i32 = 4;
+    let mut filled = [[false; PREVIEW_SIZE as usize]; PREVIEW_SIZE as usize];
+
+    if let Some(kind) = kind {
+        let piece = Tetromino::new(*kind, 0, 0);
+        for (x, y) in piece.blocks(piece.rotation).iter() {
+            let ux = *x as usize;
+            let uy = *y as usize;
+            if ux < PREVIEW_SIZE as usize && uy < PREVIEW_SIZE as usize {
+                filled[uy][ux] = true;
+            }
+        }
+    }
+
+    let mut rows = Vec::new();
+    for y in 0..PREVIEW_SIZE {
+        let mut row = div().flex();
+        for x in 0..PREVIEW_SIZE {
+            let cell_kind = if filled[y as usize][x as usize] {
+                kind.copied()
+            } else {
+                None
+            };
+            row = row.child(render_preview_cell(cell_kind));
+        }
+        rows.push(row);
+    }
+
+    div()
+        .bg(rgb(0x101010))
+        .border(px(1.0))
+        .border_color(rgb(0x2a2a2a))
+        .child(div().flex().flex_col().children(rows))
+}
+
+fn render_preview_cell(kind: Option<TetrominoType>) -> impl IntoElement {
+    let size = CELL_SIZE * 0.6;
+    let color = match kind {
+        Some(TetrominoType::I) => rgb(0x4fd1c5),
+        Some(TetrominoType::O) => rgb(0xf6e05e),
+        Some(TetrominoType::T) => rgb(0x9f7aea),
+        Some(TetrominoType::S) => rgb(0x68d391),
+        Some(TetrominoType::Z) => rgb(0xfc8181),
+        Some(TetrominoType::J) => rgb(0x63b3ed),
+        Some(TetrominoType::L) => rgb(0xf6ad55),
+        None => rgb(0x101010),
+    };
+
+    div()
+        .w(px(size))
+        .h(px(size))
+        .bg(color)
+        .border(px(1.0))
+        .border_color(rgb(0x2a2a2a))
+}
 fn render_overlay(paused: bool, game_over: bool) -> impl IntoElement {
     if !paused && !game_over {
         return div().hidden();
