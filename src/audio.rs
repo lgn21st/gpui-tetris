@@ -101,7 +101,7 @@ fn build_output_stream(
 
     let config = select_output_config(&device)?;
     let channels = config.channels() as usize;
-    let sample_rate = config.sample_rate().0;
+    let sample_rate = config.sample_rate();
 
     let assets = Arc::new(assets);
     let voices = Arc::new(Mutex::new(Vec::<Voice>::new()));
@@ -268,10 +268,10 @@ fn select_output_config(device: &cpal::Device) -> anyhow::Result<cpal::Supported
 
     while let Some(config) = candidates.next() {
         if config.channels() == 2 {
-            let min = config.min_sample_rate().0;
-            let max = config.max_sample_rate().0;
+            let min = config.min_sample_rate();
+            let max = config.max_sample_rate();
             if min <= 44_100 && max >= 44_100 {
-                selected = Some(config.with_sample_rate(cpal::SampleRate(44_100)));
+                selected = Some(config.with_sample_rate(44_100));
                 break;
             }
         }
