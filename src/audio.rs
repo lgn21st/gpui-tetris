@@ -107,83 +107,35 @@ fn build_output_stream(
     let voices = Arc::new(Mutex::new(Vec::<Voice>::new()));
 
     let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => device.build_output_stream(
-            &config.into(),
-            {
-                let assets = assets.clone();
-                let voices = voices.clone();
-                let master_gain = master_gain.clone();
-                move |data: &mut [f32], _| {
-                    let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                    render_audio(data, channels, sample_rate, &rx, &assets, &voices, gain);
-                }
-            },
-            move |err| {
-                eprintln!("audio stream error: {err}");
-            },
-            None,
+        cpal::SampleFormat::F32 => build_output_stream_f32(
+            &device,
+            &config,
+            channels,
+            sample_rate,
+            rx,
+            &assets,
+            &voices,
+            &master_gain,
         )?,
-        cpal::SampleFormat::I16 => device.build_output_stream(
-            &config.into(),
-            {
-                let assets = assets.clone();
-                let voices = voices.clone();
-                let master_gain = master_gain.clone();
-                let mut scratch: Vec<f32> = Vec::new();
-                move |data: &mut [i16], _| {
-                    if scratch.len() != data.len() {
-                        scratch.resize(data.len(), 0.0);
-                    }
-                    let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                    render_audio(
-                        &mut scratch,
-                        channels,
-                        sample_rate,
-                        &rx,
-                        &assets,
-                        &voices,
-                        gain,
-                    );
-                    for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
-                        *dst = <i16 as cpal::Sample>::from_sample(*sample);
-                    }
-                }
-            },
-            move |err| {
-                eprintln!("audio stream error: {err}");
-            },
-            None,
+        cpal::SampleFormat::I16 => build_output_stream_i16(
+            &device,
+            &config,
+            channels,
+            sample_rate,
+            rx,
+            &assets,
+            &voices,
+            &master_gain,
         )?,
-        cpal::SampleFormat::U16 => device.build_output_stream(
-            &config.into(),
-            {
-                let assets = assets.clone();
-                let voices = voices.clone();
-                let master_gain = master_gain.clone();
-                let mut scratch: Vec<f32> = Vec::new();
-                move |data: &mut [u16], _| {
-                    if scratch.len() != data.len() {
-                        scratch.resize(data.len(), 0.0);
-                    }
-                    let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                    render_audio(
-                        &mut scratch,
-                        channels,
-                        sample_rate,
-                        &rx,
-                        &assets,
-                        &voices,
-                        gain,
-                    );
-                    for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
-                        *dst = <u16 as cpal::Sample>::from_sample(*sample);
-                    }
-                }
-            },
-            move |err| {
-                eprintln!("audio stream error: {err}");
-            },
-            None,
+        cpal::SampleFormat::U16 => build_output_stream_u16(
+            &device,
+            &config,
+            channels,
+            sample_rate,
+            rx,
+            &assets,
+            &voices,
+            &master_gain,
         )?,
         _ => {
             return Err(anyhow::anyhow!(
@@ -194,6 +146,120 @@ fn build_output_stream(
     };
 
     Ok(stream)
+}
+
+fn build_output_stream_f32(
+    device: &cpal::Device,
+    config: &cpal::SupportedStreamConfig,
+    channels: usize,
+    sample_rate: u32,
+    rx: Receiver<SoundEvent>,
+    assets: &Arc<HashMap<&'static str, SoundAsset>>,
+    voices: &Arc<Mutex<Vec<Voice>>>,
+    master_gain: &Arc<AtomicU32>,
+) -> anyhow::Result<cpal::Stream> {
+    let assets = assets.clone();
+    let voices = voices.clone();
+    let master_gain = master_gain.clone();
+    device
+        .build_output_stream(
+            &config.clone().into(),
+            move |data: &mut [f32], _| {
+                let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
+                render_audio(data, channels, sample_rate, &rx, &assets, &voices, gain);
+            },
+            move |err| {
+                eprintln!("audio stream error: {err}");
+            },
+            None,
+        )
+        .map_err(Into::into)
+}
+
+fn build_output_stream_i16(
+    device: &cpal::Device,
+    config: &cpal::SupportedStreamConfig,
+    channels: usize,
+    sample_rate: u32,
+    rx: Receiver<SoundEvent>,
+    assets: &Arc<HashMap<&'static str, SoundAsset>>,
+    voices: &Arc<Mutex<Vec<Voice>>>,
+    master_gain: &Arc<AtomicU32>,
+) -> anyhow::Result<cpal::Stream> {
+    let assets = assets.clone();
+    let voices = voices.clone();
+    let master_gain = master_gain.clone();
+    let mut scratch: Vec<f32> = Vec::new();
+    device
+        .build_output_stream(
+            &config.clone().into(),
+            move |data: &mut [i16], _| {
+                if scratch.len() != data.len() {
+                    scratch.resize(data.len(), 0.0);
+                }
+                let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
+                render_audio(
+                    &mut scratch,
+                    channels,
+                    sample_rate,
+                    &rx,
+                    &assets,
+                    &voices,
+                    gain,
+                );
+                for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
+                    *dst = <i16 as cpal::Sample>::from_sample(*sample);
+                }
+            },
+            move |err| {
+                eprintln!("audio stream error: {err}");
+            },
+            None,
+        )
+        .map_err(Into::into)
+}
+
+fn build_output_stream_u16(
+    device: &cpal::Device,
+    config: &cpal::SupportedStreamConfig,
+    channels: usize,
+    sample_rate: u32,
+    rx: Receiver<SoundEvent>,
+    assets: &Arc<HashMap<&'static str, SoundAsset>>,
+    voices: &Arc<Mutex<Vec<Voice>>>,
+    master_gain: &Arc<AtomicU32>,
+) -> anyhow::Result<cpal::Stream> {
+    let assets = assets.clone();
+    let voices = voices.clone();
+    let master_gain = master_gain.clone();
+    let mut scratch: Vec<f32> = Vec::new();
+    device
+        .build_output_stream(
+            &config.clone().into(),
+            move |data: &mut [u16], _| {
+                if scratch.len() != data.len() {
+                    scratch.resize(data.len(), 0.0);
+                }
+                let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
+                render_audio(
+                    &mut scratch,
+                    channels,
+                    sample_rate,
+                    &rx,
+                    &assets,
+                    &voices,
+                    gain,
+                );
+                for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
+                    *dst = <u16 as cpal::Sample>::from_sample(*sample);
+                }
+            },
+            move |err| {
+                eprintln!("audio stream error: {err}");
+            },
+            None,
+        )
+        .map_err(Into::into)
 }
 
 fn select_output_config(device: &cpal::Device) -> anyhow::Result<cpal::SupportedStreamConfig> {

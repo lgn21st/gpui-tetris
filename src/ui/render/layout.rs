@@ -18,22 +18,38 @@ pub fn render_board(
     scale: f32,
 ) -> impl IntoElement {
     let show_active = !ui.state.is_line_clear_active();
-    let mut active_cells = Vec::with_capacity(4);
-    let landing_cells = if ui.state.landing_flash_active() {
-        ui.state.last_lock_cells
-    } else {
-        [(0, 0); 4]
-    };
-    let ghost_cells = if show_active {
-        let active_blocks = ui.state.active.blocks(ui.state.active.rotation);
-        active_cells = Vec::with_capacity(4);
-        for (dx, dy) in active_blocks.iter() {
-            active_cells.push((ui.state.active.x + dx, ui.state.active.y + dy));
+    let cols = BOARD_COLS as i32;
+    let rows = BOARD_ROWS as i32;
+    let mask_len = (cols * rows) as usize;
+    let mut flash_mask = vec![false; mask_len];
+    let mut active_mask = vec![false; mask_len];
+    let mut ghost_mask = vec![false; mask_len];
+
+    let set_mask = |mask: &mut [bool], x: i32, y: i32| {
+        if x >= 0 && x < cols && y >= 0 && y < rows {
+            let idx = (y as usize * cols as usize) + x as usize;
+            mask[idx] = true;
         }
-        ui.state.ghost_blocks()
-    } else {
-        [(0, 0); 4]
     };
+
+    if ui.state.landing_flash_active() {
+        for (x, y) in ui.state.last_lock_cells.iter() {
+            set_mask(&mut flash_mask, *x, *y);
+        }
+    }
+
+    if show_active {
+        for (dx, dy) in ui.state.active.blocks(ui.state.active.rotation).iter() {
+            set_mask(
+                &mut active_mask,
+                ui.state.active.x + dx,
+                ui.state.active.y + dy,
+            );
+        }
+        for (x, y) in ui.state.ghost_blocks().iter() {
+            set_mask(&mut ghost_mask, *x, *y);
+        }
+    }
 
     let mut rows = Vec::with_capacity(BOARD_ROWS as usize);
     for y in 0..BOARD_ROWS as i32 {
@@ -41,15 +57,12 @@ pub fn render_board(
         for x in 0..BOARD_COLS as i32 {
             let mut cell_kind = ui.state.board.cells[y as usize][x as usize].kind;
             let mut is_ghost = false;
-            let mut is_flash = false;
-            if ui.state.landing_flash_active()
-                && landing_cells.iter().any(|(lx, ly)| *lx == x && *ly == y)
-            {
-                is_flash = true;
-            }
-            if show_active && active_cells.iter().any(|(ax, ay)| *ax == x && *ay == y) {
+            let idx = (y as usize * cols as usize) + x as usize;
+            let is_flash = flash_mask[idx];
+
+            if show_active && active_mask[idx] {
                 cell_kind = Some(ui.state.active.kind);
-            } else if show_active && ghost_cells.iter().any(|(gx, gy)| *gx == x && *gy == y) {
+            } else if show_active && ghost_mask[idx] {
                 cell_kind = Some(ui.state.active.kind);
                 is_ghost = true;
             }

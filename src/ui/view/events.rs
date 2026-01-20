@@ -1,7 +1,7 @@
-use gpui::{Context, KeyDownEvent, KeyUpEvent, Window};
 use crate::ui::input::InputAction;
 use crate::ui::style::SFX_VOLUME_STEP;
 use crate::ui::view::TetrisView;
+use gpui::{Context, KeyDownEvent, KeyUpEvent, Window};
 
 impl TetrisView {
     pub(super) fn on_key_down(
