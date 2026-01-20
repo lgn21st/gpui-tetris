@@ -10,6 +10,7 @@ Goal: build a desktop Tetris game in Rust using `gpui`.
   - `ui/`: gpui views, input handling, HUD.
     - `ui/app.rs`: app bootstrap, window/menu setup, keybindings.
     - `ui/view.rs`: main render loop + event wiring.
+      - `ui/view/events.rs`: input event handlers and focus handling.
     - `ui/input.rs`: keyboard/controller repeat handling.
     - `ui/ui_state.rs`: session state + HUD labels + SFX toggles.
     - `ui/render/`: board/panel/overlay render helpers.

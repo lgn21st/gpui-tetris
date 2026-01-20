@@ -56,13 +56,8 @@ pub struct GameState {
 impl GameState {
     pub fn new(seed: u64, config: GameConfig) -> Self {
         let mut rng = SimpleRng::new(seed);
-        let mut next_queue = Vec::new();
-        refill_bag(&mut rng, &mut next_queue);
-        ensure_queue(&mut rng, &mut next_queue);
-
-        let first_kind = next_queue.remove(0);
-        let (spawn_x, spawn_y) = spawn_position();
-        let active = Tetromino::new(first_kind, spawn_x, spawn_y);
+        let mut next_queue = init_next_queue(&mut rng);
+        let active = spawn_first_piece(&mut next_queue);
 
         Self {
             board: Board::new(),
@@ -222,4 +217,17 @@ impl GameState {
     fn lock_active_piece(&mut self) {
         lock_active_piece(self);
     }
+}
+
+fn init_next_queue(rng: &mut SimpleRng) -> Vec<TetrominoType> {
+    let mut next_queue = Vec::new();
+    refill_bag(rng, &mut next_queue);
+    ensure_queue(rng, &mut next_queue);
+    next_queue
+}
+
+fn spawn_first_piece(next_queue: &mut Vec<TetrominoType>) -> Tetromino {
+    let first_kind = next_queue.remove(0);
+    let (spawn_x, spawn_y) = spawn_position();
+    Tetromino::new(first_kind, spawn_x, spawn_y)
 }

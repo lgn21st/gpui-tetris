@@ -14,69 +14,76 @@ pub(super) fn apply_action(state: &mut GameState, action: GameAction) {
     }
 
     match action {
-        GameAction::MoveLeft => {
-            try_move(state, -1, 0);
-            state.last_action_rotate = false;
-            state.sound_events.push(SoundEvent::Move);
-        }
-        GameAction::MoveRight => {
-            try_move(state, 1, 0);
-            state.last_action_rotate = false;
-            state.sound_events.push(SoundEvent::Move);
-        }
-        GameAction::SoftDrop => {
-            if try_move(state, 0, 1) {
-                state.score = state.score.saturating_add(1);
-            }
-            activate_soft_drop(state);
-            state.last_action_rotate = false;
-            state.sound_events.push(SoundEvent::SoftDrop);
-        }
-        GameAction::HardDrop => {
-            let mut dropped = 0;
-            while try_move(state, 0, 1) {
-                dropped += 1;
-            }
-            if dropped > 0 {
-                state.score = state.score.saturating_add(dropped * 2);
-            }
-            state.sound_events.push(SoundEvent::HardDrop);
-            lock_active_piece(state);
-            state.lock_timer_ms = 0;
-            state.drop_timer_ms = 0;
-        }
-        GameAction::RotateCw => {
-            state.last_action_rotate = try_rotate(state, true);
-            state.sound_events.push(SoundEvent::Rotate);
-        }
-        GameAction::RotateCcw => {
-            state.last_action_rotate = try_rotate(state, false);
-            state.sound_events.push(SoundEvent::Rotate);
-        }
-        GameAction::Hold => {
-            if !state.can_hold {
-                return;
-            }
-
-            let current_kind = state.active.kind;
-            if let Some(held_kind) = state.hold {
-                state.hold = Some(current_kind);
-                state.active = spawn_piece(state, held_kind);
-            } else {
-                state.hold = Some(current_kind);
-                state.spawn_next();
-            }
-            state.can_hold = false;
-            state.last_action_rotate = false;
-            state.sound_events.push(SoundEvent::Hold);
-        }
-        GameAction::Pause => {
-            state.paused = !state.paused;
-        }
-        GameAction::Restart => {
-            state.reset();
-        }
+        GameAction::MoveLeft => handle_move(state, -1),
+        GameAction::MoveRight => handle_move(state, 1),
+        GameAction::SoftDrop => handle_soft_drop(state),
+        GameAction::HardDrop => handle_hard_drop(state),
+        GameAction::RotateCw => handle_rotate(state, true),
+        GameAction::RotateCcw => handle_rotate(state, false),
+        GameAction::Hold => handle_hold(state),
+        GameAction::Pause => handle_pause(state),
+        GameAction::Restart => handle_restart(state),
     }
+}
+
+fn handle_move(state: &mut GameState, dx: i32) {
+    try_move(state, dx, 0);
+    state.last_action_rotate = false;
+    state.sound_events.push(SoundEvent::Move);
+}
+
+fn handle_soft_drop(state: &mut GameState) {
+    if try_move(state, 0, 1) {
+        state.score = state.score.saturating_add(1);
+    }
+    activate_soft_drop(state);
+    state.last_action_rotate = false;
+    state.sound_events.push(SoundEvent::SoftDrop);
+}
+
+fn handle_hard_drop(state: &mut GameState) {
+    let mut dropped = 0;
+    while try_move(state, 0, 1) {
+        dropped += 1;
+    }
+    if dropped > 0 {
+        state.score = state.score.saturating_add(dropped * 2);
+    }
+    state.sound_events.push(SoundEvent::HardDrop);
+    lock_active_piece(state);
+    state.lock_timer_ms = 0;
+    state.drop_timer_ms = 0;
+}
+
+fn handle_rotate(state: &mut GameState, clockwise: bool) {
+    state.last_action_rotate = try_rotate(state, clockwise);
+    state.sound_events.push(SoundEvent::Rotate);
+}
+
+fn handle_hold(state: &mut GameState) {
+    if !state.can_hold {
+        return;
+    }
+
+    let current_kind = state.active.kind;
+    if let Some(held_kind) = state.hold {
+        state.hold = Some(current_kind);
+        state.active = spawn_piece(state, held_kind);
+    } else {
+        state.hold = Some(current_kind);
+        state.spawn_next();
+    }
+    state.can_hold = false;
+    state.last_action_rotate = false;
+    state.sound_events.push(SoundEvent::Hold);
+}
+
+fn handle_pause(state: &mut GameState) {
+    state.paused = !state.paused;
+}
+
+fn handle_restart(state: &mut GameState) {
+    state.reset();
 }
 
 pub(super) fn spawn_piece(state: &mut GameState, kind: TetrominoType) -> Tetromino {
