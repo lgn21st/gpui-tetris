@@ -14,13 +14,20 @@ use std::time::Instant;
 pub const WINDOW_WIDTH: f32 = 480.0;
 pub const WINDOW_HEIGHT: f32 = 720.0;
 pub const CELL_SIZE: f32 = 24.0;
+const BASE_WINDOW_WIDTH: f32 = WINDOW_WIDTH;
+const BASE_WINDOW_HEIGHT: f32 = WINDOW_HEIGHT;
+const BASE_CELL_SIZE: f32 = CELL_SIZE;
 
 const BOARD_COLS: f32 = 10.0;
 const BOARD_ROWS: f32 = 20.0;
-const PADDING: f32 = 16.0;
-const GAP: f32 = 16.0;
+const BASE_PADDING: f32 = 16.0;
+const BASE_GAP: f32 = 16.0;
 const DEFAULT_SFX_VOLUME: f32 = 0.7;
 const SFX_VOLUME_STEP: f32 = 0.1;
+const MIN_SCALE: f32 = 0.6;
+const BASE_PANEL_TEXT: f32 = 12.0;
+const BASE_TITLE_TEXT: f32 = 24.0;
+const BASE_HINT_TEXT: f32 = 14.0;
 
 actions!(
     tetris,
@@ -43,7 +50,11 @@ pub fn run() {
         let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            is_resizable: false,
+            is_resizable: true,
+            window_min_size: Some(size(
+                px(BASE_WINDOW_WIDTH * MIN_SCALE),
+                px(BASE_WINDOW_HEIGHT * MIN_SCALE),
+            )),
             ..Default::default()
         };
         let audio_engine = match AudioEngine::new(Path::new("assets/sfx")) {
@@ -101,9 +112,6 @@ pub fn run() {
 }
 
 struct TetrisView {
-    board_width: f32,
-    board_height: f32,
-    panel_width: f32,
     last_action: Option<GameAction>,
     state: GameState,
     last_tick: Option<Instant>,
@@ -122,15 +130,9 @@ struct TetrisView {
 
 impl TetrisView {
     fn new(cx: &mut Context<Self>, audio: Option<AudioEngine>) -> Self {
-        let board_width = CELL_SIZE * BOARD_COLS;
-        let board_height = CELL_SIZE * BOARD_ROWS;
-        let panel_width = WINDOW_WIDTH - board_width - (PADDING * 2.0) - GAP;
         let state = GameState::new(1, GameConfig::default());
         let focus_handle = cx.focus_handle();
         let mut view = Self {
-            board_width,
-            board_height,
-            panel_width,
             last_action: None,
             state,
             last_tick: None,
@@ -154,6 +156,14 @@ impl TetrisView {
 
 impl Render for TetrisView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let scale = compute_scale(window);
+        let cell_size = BASE_CELL_SIZE * scale;
+        let padding = BASE_PADDING * scale;
+        let gap = BASE_GAP * scale;
+        let board_width = cell_size * BOARD_COLS;
+        let board_height = cell_size * BOARD_ROWS;
+        let panel_width =
+            (BASE_WINDOW_WIDTH * scale) - board_width - (padding * 2.0) - gap;
         let now = Instant::now();
         let focused = self.focus_handle.is_focused(window);
         if self.was_focused && !focused {
@@ -210,7 +220,7 @@ impl Render for TetrisView {
                     is_ghost = true;
                 }
 
-                row = row.child(render_cell(cell_kind, is_ghost, is_flash));
+                row = row.child(render_cell(cell_kind, is_ghost, is_flash, cell_size));
             }
             rows.push(row);
         }
@@ -232,8 +242,8 @@ impl Render for TetrisView {
                     .p_4()
                     .child(
                         div()
-                            .w(px(self.board_width))
-                            .h(px(self.board_height))
+                            .w(px(board_width))
+                            .h(px(board_height))
                             .bg(rgb(0x1c1c1c))
                             .border(px(1.0))
                             .border_color(rgb(0x2e2e2e))
@@ -250,23 +260,25 @@ impl Render for TetrisView {
                                 focused,
                                 self.sfx_volume_label(),
                                 self.sfx_muted,
+                                scale,
                             )),
                     )
                     .child(
                         div()
-                            .w(px(self.panel_width))
-                            .h(px(self.board_height))
+                            .w(px(panel_width.max(cell_size * 4.0)))
+                            .h(px(board_height))
                             .bg(rgb(0x1a1a1a))
                             .border(px(1.0))
                             .border_color(rgb(0x2e2e2e))
-                            .p_3()
+                            .p(px(padding * 0.75))
                             .flex()
                             .flex_col()
-                            .gap_3()
+                            .gap(px(gap * 0.6))
+                            .text_size(px(BASE_PANEL_TEXT * scale))
                             .text_color(rgb(0xe6e6e6))
                             .child(
                                 div()
-                                    .text_sm()
+                                    .text_size(px(BASE_PANEL_TEXT * scale * 0.95))
                                     .child(format!(
                                         "Last input: {}",
                                         self.last_action
@@ -279,7 +291,7 @@ impl Render for TetrisView {
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .gap_1()
+                                    .gap(px(gap * 0.2))
                                     .child(format!("Score: {}", self.state.score))
                                     .child(format!("Level: {}", self.state.level))
                                     .child(format!("Lines: {}", self.state.lines))
@@ -338,23 +350,24 @@ impl Render for TetrisView {
                                         self.state.lock_timer_ms,
                                         self.state.lock_delay_ms,
                                         self.state.is_grounded(),
+                                        scale,
                                     )),
                             )
                             .child(
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .gap_1()
-                                    .child(div().text_sm().child("Hold"))
-                                    .child(render_preview(self.state.hold.as_ref())),
+                                    .gap(px(gap * 0.2))
+                                    .child(div().text_size(px(BASE_PANEL_TEXT * scale * 0.95)).child("Hold"))
+                                    .child(render_preview(self.state.hold.as_ref(), cell_size)),
                             )
                             .child(
                                 div()
                                     .flex()
                                     .flex_col()
-                                    .gap_1()
-                                    .child(div().text_sm().child("Next"))
-                                    .child(render_preview(self.state.next_queue.first())),
+                                    .gap(px(gap * 0.2))
+                                    .child(div().text_size(px(BASE_PANEL_TEXT * scale * 0.95)).child("Next"))
+                                    .child(render_preview(self.state.next_queue.first(), cell_size)),
                             ),
                     ),
             )
@@ -375,7 +388,12 @@ fn action_label(action: &GameAction) -> &'static str {
     }
 }
 
-fn render_cell(kind: Option<TetrominoType>, ghost: bool, flash: bool) -> impl IntoElement {
+fn render_cell(
+    kind: Option<TetrominoType>,
+    ghost: bool,
+    flash: bool,
+    cell_size: f32,
+) -> impl IntoElement {
     let color = match kind {
         Some(TetrominoType::I) => rgb(0x4fd1c5),
         Some(TetrominoType::O) => rgb(0xf6e05e),
@@ -394,14 +412,14 @@ fn render_cell(kind: Option<TetrominoType>, ghost: bool, flash: bool) -> impl In
     let border = if flash { rgb(0xfef3c7) } else { rgb(0x2a2a2a) };
 
     div()
-        .w(px(CELL_SIZE))
-        .h(px(CELL_SIZE))
+        .w(px(cell_size))
+        .h(px(cell_size))
         .bg(fill)
         .border(px(1.0))
         .border_color(border)
 }
 
-fn render_preview(kind: Option<&TetrominoType>) -> impl IntoElement {
+fn render_preview(kind: Option<&TetrominoType>, cell_size: f32) -> impl IntoElement {
     const PREVIEW_SIZE: i32 = 4;
     let mut filled = [[false; PREVIEW_SIZE as usize]; PREVIEW_SIZE as usize];
 
@@ -425,7 +443,7 @@ fn render_preview(kind: Option<&TetrominoType>) -> impl IntoElement {
             } else {
                 None
             };
-            row = row.child(render_preview_cell(cell_kind));
+            row = row.child(render_preview_cell(cell_kind, cell_size));
         }
         rows.push(row);
     }
@@ -437,8 +455,8 @@ fn render_preview(kind: Option<&TetrominoType>) -> impl IntoElement {
         .child(div().flex().flex_col().children(rows))
 }
 
-fn render_preview_cell(kind: Option<TetrominoType>) -> impl IntoElement {
-    let size = CELL_SIZE * 0.6;
+fn render_preview_cell(kind: Option<TetrominoType>, cell_size: f32) -> impl IntoElement {
+    let size = cell_size * 0.6;
     let color = match kind {
         Some(TetrominoType::I) => rgb(0x4fd1c5),
         Some(TetrominoType::O) => rgb(0xf6e05e),
@@ -691,7 +709,10 @@ fn render_overlay(
     focused: bool,
     sfx_label: String,
     muted: bool,
+    scale: f32,
 ) -> impl IntoElement {
+    let title_size = (BASE_TITLE_TEXT * scale).max(16.0);
+    let hint_size = (BASE_HINT_TEXT * scale).max(10.0);
     if show_settings {
         return div()
             .absolute()
@@ -706,16 +727,16 @@ fn render_overlay(
             .gap_2()
             .justify_center()
             .items_center()
-            .text_xl()
             .text_color(rgb(0xf5f5f5))
+            .text_size(px(title_size))
             .child("Settings")
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(hint_size))
                     .child(format!("SFX Volume: {}{}", sfx_label, if muted { " (M)" } else { "" })),
             )
-            .child(div().text_sm().child("M: mute · +/-: volume · 0: reset"))
-            .child(div().text_sm().child("S or Esc: back"));
+            .child(div().text_size(px(hint_size)).child("M: mute · +/-: volume · 0: reset"))
+            .child(div().text_size(px(hint_size)).child("S or Esc: back"));
     }
 
     if !started {
@@ -732,11 +753,11 @@ fn render_overlay(
             .gap_2()
             .justify_center()
             .items_center()
-            .text_xl()
             .text_color(rgb(0xf5f5f5))
+            .text_size(px(title_size))
             .child("gpui‑tetris")
-            .child(div().text_sm().child("Press Enter or Space to Start"))
-            .child(div().text_sm().child("S: Settings"));
+            .child(div().text_size(px(hint_size)).child("Press Enter or Space to Start"))
+            .child(div().text_size(px(hint_size)).child("S: Settings"));
     }
 
     if !paused && !game_over {
@@ -756,8 +777,8 @@ fn render_overlay(
             .gap_2()
             .justify_center()
             .items_center()
-            .text_xl()
             .text_color(rgb(0xf5f5f5))
+            .text_size(px(title_size))
             .child("Click to Focus");
     }
 
@@ -781,10 +802,10 @@ fn render_overlay(
         .gap_2()
         .justify_center()
         .items_center()
-        .text_xl()
         .text_color(rgb(0xf5f5f5))
+        .text_size(px(title_size))
         .child(label)
-        .child(div().text_sm().child(hint))
+        .child(div().text_size(px(hint_size)).child(hint))
 }
 
 fn render_line_clear_flash(active: bool) -> impl IntoElement {
@@ -832,7 +853,12 @@ fn render_lock_warning(intensity: f32) -> impl IntoElement {
         .opacity(intensity)
 }
 
-fn render_lock_bar(lock_timer_ms: u64, lock_delay_ms: u64, grounded: bool) -> impl IntoElement {
+fn render_lock_bar(
+    lock_timer_ms: u64,
+    lock_delay_ms: u64,
+    grounded: bool,
+    scale: f32,
+) -> impl IntoElement {
     const BAR_WIDTH: f32 = 140.0;
     const BAR_HEIGHT: f32 = 6.0;
 
@@ -840,8 +866,10 @@ fn render_lock_bar(lock_timer_ms: u64, lock_delay_ms: u64, grounded: bool) -> im
         return div().hidden();
     }
 
+    let bar_width = BAR_WIDTH * scale;
+    let bar_height = BAR_HEIGHT * scale;
     let ratio = (lock_timer_ms as f32 / lock_delay_ms as f32).clamp(0.0, 1.0);
-    let fill_width = BAR_WIDTH * ratio;
+    let fill_width = bar_width * ratio;
     let fill_color = if ratio > 0.8 {
         rgb(0xf87171)
     } else if ratio > 0.5 {
@@ -854,16 +882,24 @@ fn render_lock_bar(lock_timer_ms: u64, lock_delay_ms: u64, grounded: bool) -> im
         .flex()
         .flex_col()
         .gap_1()
-        .child(div().text_sm().child("Lock delay"))
+        .child(div().text_size(px(BASE_PANEL_TEXT * scale * 0.95)).child("Lock delay"))
         .child(
             div()
-                .w(px(BAR_WIDTH))
-                .h(px(BAR_HEIGHT))
+                .w(px(bar_width))
+                .h(px(bar_height))
                 .bg(rgb(0x1f2937))
                 .border(px(1.0))
                 .border_color(rgb(0x374151))
-                .child(div().w(px(fill_width)).h(px(BAR_HEIGHT)).bg(fill_color)),
+                .child(div().w(px(fill_width)).h(px(bar_height)).bg(fill_color)),
         )
+}
+
+fn compute_scale(window: &Window) -> f32 {
+    let viewport = window.viewport_size();
+    let width = (viewport.width / px(1.0)).max(1.0);
+    let height = (viewport.height / px(1.0)).max(1.0);
+    let scale = (width / BASE_WINDOW_WIDTH).min(height / BASE_WINDOW_HEIGHT);
+    scale.clamp(MIN_SCALE, 4.0)
 }
 fn register_action<A: Action + 'static>(
     cx: &mut App,
