@@ -1,5 +1,6 @@
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
+use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
 use gpui_tetris::game::state::GameState;
 
 use crate::ui::style::{BOARD_COLS_USIZE, BOARD_ROWS_USIZE, DEFAULT_SFX_VOLUME};
@@ -19,6 +20,7 @@ pub struct UiState {
     pub(crate) ghost_mask: [bool; BOARD_CELLS],
     pub(crate) panel_labels: PanelLabels,
     labels_dirty: bool,
+    pub(crate) preview_cache: PreviewCache,
 }
 
 #[derive(Default)]
@@ -45,6 +47,8 @@ pub const FOCUS_HINT: &str = "Click to Focus";
 pub const PAUSED_HINT: &str = "Press P to resume";
 pub const GAME_OVER_HINT: &str = "Press R to restart";
 
+const PREVIEW_SIZE: usize = 4;
+
 impl UiState {
     pub fn new(state: GameState, audio: Option<AudioEngine>) -> Self {
         let mut ui = Self {
@@ -60,6 +64,7 @@ impl UiState {
             ghost_mask: [false; BOARD_CELLS],
             panel_labels: PanelLabels::default(),
             labels_dirty: true,
+            preview_cache: PreviewCache::new(),
         };
         ui.apply_audio_volume();
         ui.sync_panel_labels();
@@ -185,6 +190,13 @@ impl UiState {
         self.ghost_mask.fill(false);
     }
 
+    pub fn preview_mask(
+        &mut self,
+        kind: Option<TetrominoType>,
+    ) -> &[[bool; PREVIEW_SIZE]; PREVIEW_SIZE] {
+        self.preview_cache.mask(kind)
+    }
+
     pub fn sync_panel_labels(&mut self) {
         if !self.labels_dirty {
             return;
@@ -249,6 +261,45 @@ impl UiState {
     }
 }
 
+#[derive(Clone)]
+pub struct PreviewCache {
+    masks: [Option<[[bool; PREVIEW_SIZE]; PREVIEW_SIZE]>; 7],
+}
+
+impl PreviewCache {
+    pub fn new() -> Self {
+        Self {
+            masks: std::array::from_fn(|_| None),
+        }
+    }
+
+    pub fn mask(&mut self, kind: Option<TetrominoType>) -> &[[bool; PREVIEW_SIZE]; PREVIEW_SIZE] {
+        if let Some(kind) = kind {
+            let idx = kind as usize;
+            if self.masks[idx].is_none() {
+                self.masks[idx] = Some(build_preview_mask(kind));
+            }
+            return self.masks[idx].as_ref().expect("cached mask");
+        }
+
+        static EMPTY: [[bool; PREVIEW_SIZE]; PREVIEW_SIZE] = [[false; PREVIEW_SIZE]; PREVIEW_SIZE];
+        &EMPTY
+    }
+}
+
+fn build_preview_mask(kind: TetrominoType) -> [[bool; PREVIEW_SIZE]; PREVIEW_SIZE] {
+    let mut filled = [[false; PREVIEW_SIZE]; PREVIEW_SIZE];
+    let piece = Tetromino::new(kind, 0, 0);
+    for (x, y) in piece.blocks(piece.rotation).iter() {
+        let ux = *x as usize;
+        let uy = *y as usize;
+        if ux < PREVIEW_SIZE && uy < PREVIEW_SIZE {
+            filled[uy][ux] = true;
+        }
+    }
+    filled
+}
+
 fn action_label(action: &GameAction) -> &'static str {
     match action {
         GameAction::MoveLeft => "Left",
@@ -267,6 +318,7 @@ fn action_label(action: &GameAction) -> &'static str {
 mod tests {
     use super::UiState;
     use gpui_tetris::game::input::GameAction;
+    use gpui_tetris::game::pieces::TetrominoType;
     use gpui_tetris::game::state::GameState;
 
     #[test]
@@ -311,5 +363,19 @@ mod tests {
         ui.receive_action(GameAction::Pause);
 
         assert_eq!(ui.last_action, Some(GameAction::Pause));
+    }
+
+    #[test]
+    fn preview_mask_has_blocks_for_piece() {
+        let state = GameState::new(1, Default::default());
+        let mut ui = UiState::new(state, None);
+
+        let mask = ui.preview_mask(Some(TetrominoType::I));
+        let any_filled = mask.iter().flatten().any(|filled| *filled);
+        assert!(any_filled);
+
+        let empty = ui.preview_mask(None);
+        let any_empty_filled = empty.iter().flatten().any(|filled| *filled);
+        assert!(!any_empty_filled);
     }
 }

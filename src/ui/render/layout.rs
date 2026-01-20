@@ -121,7 +121,7 @@ pub fn render_board(
         ))
 }
 
-pub fn render_panel(ui: &UiState, layout: &RenderLayout) -> impl IntoElement + use<> {
+pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement + use<> {
     div()
         .w(px(layout.panel_width.max(layout.cell_size * 4.0)))
         .h(px(layout.board_height))
@@ -188,7 +188,7 @@ pub fn render_panel(ui: &UiState, layout: &RenderLayout) -> impl IntoElement + u
                         .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
                         .child("Hold"),
                 )
-                .child(render_preview(ui.state.hold.as_ref(), layout.cell_size)),
+                .child(render_preview(ui, ui.state.hold, layout.cell_size)),
         )
         .child(
             div()
@@ -201,7 +201,8 @@ pub fn render_panel(ui: &UiState, layout: &RenderLayout) -> impl IntoElement + u
                         .child("Next"),
                 )
                 .child(render_preview(
-                    ui.state.next_queue.first(),
+                    ui,
+                    ui.state.next_queue.first().copied(),
                     layout.cell_size,
                 )),
         )

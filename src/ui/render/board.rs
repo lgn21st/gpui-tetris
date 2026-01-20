@@ -1,7 +1,8 @@
 use gpui::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
-use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
+use crate::ui::ui_state::UiState;
+use gpui_tetris::game::pieces::TetrominoType;
 
 pub fn render_cell(
     kind: Option<TetrominoType>,
@@ -24,27 +25,20 @@ pub fn render_cell(
         .border_color(border)
 }
 
-pub fn render_preview(kind: Option<&TetrominoType>, cell_size: f32) -> impl IntoElement {
+pub fn render_preview(
+    ui: &mut UiState,
+    kind: Option<TetrominoType>,
+    cell_size: f32,
+) -> impl IntoElement + use<> {
     const PREVIEW_SIZE: i32 = 4;
-    let mut filled = [[false; PREVIEW_SIZE as usize]; PREVIEW_SIZE as usize];
-
-    if let Some(kind) = kind {
-        let piece = Tetromino::new(*kind, 0, 0);
-        for (x, y) in piece.blocks(piece.rotation).iter() {
-            let ux = *x as usize;
-            let uy = *y as usize;
-            if ux < PREVIEW_SIZE as usize && uy < PREVIEW_SIZE as usize {
-                filled[uy][ux] = true;
-            }
-        }
-    }
+    let filled = ui.preview_mask(kind);
 
     let mut rows = Vec::with_capacity(PREVIEW_SIZE as usize);
-    for y in 0..PREVIEW_SIZE {
+    for y in 0..PREVIEW_SIZE as i32 {
         let mut row = div().flex();
-        for x in 0..PREVIEW_SIZE {
+        for x in 0..PREVIEW_SIZE as i32 {
             let cell_kind = if filled[y as usize][x as usize] {
-                kind.copied()
+                kind
             } else {
                 None
             };

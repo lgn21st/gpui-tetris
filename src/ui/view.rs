@@ -56,14 +56,8 @@ impl Render for TetrisView {
         self.play_sound_events();
         self.ui.sync_panel_labels();
 
-        let board = {
-            let ui = &mut self.ui;
-            render_board(ui, &layout, focused)
-        };
-        let panel = {
-            let ui = &self.ui;
-            render_panel(ui, &layout)
-        };
+        let board = render_board(&mut self.ui, &layout, focused);
+        let panel = render_panel(&mut self.ui, &layout);
 
         div()
             .size_full()
