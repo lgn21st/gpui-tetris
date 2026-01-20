@@ -79,10 +79,11 @@ pub fn render_board(
     }
 
     let mut rows = Vec::with_capacity(BOARD_ROWS_USIZE);
-    for y in 0..BOARD_ROWS_USIZE as i32 {
+    for y in 0..BOARD_ROWS_USIZE {
         let mut row = div().flex();
-        for x in 0..BOARD_COLS_USIZE as i32 {
-            let idx = (y as usize * cols as usize) + x as usize;
+        let row_base = y * BOARD_COLS_USIZE;
+        for x in 0..BOARD_COLS_USIZE {
+            let idx = row_base + x;
             let mut cell_kind = ui.board_cache[idx];
             let mut is_ghost = false;
             let is_flash = ui.flash_mask[idx];

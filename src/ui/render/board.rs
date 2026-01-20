@@ -30,18 +30,14 @@ pub fn render_preview(
     kind: Option<TetrominoType>,
     cell_size: f32,
 ) -> impl IntoElement + use<> {
-    const PREVIEW_SIZE: i32 = 4;
+    const PREVIEW_SIZE: usize = 4;
     let filled = ui.preview_mask(kind);
 
     let mut rows = Vec::with_capacity(PREVIEW_SIZE as usize);
-    for y in 0..PREVIEW_SIZE as i32 {
+    for y in 0..PREVIEW_SIZE {
         let mut row = div().flex();
-        for x in 0..PREVIEW_SIZE as i32 {
-            let cell_kind = if filled[y as usize][x as usize] {
-                kind
-            } else {
-                None
-            };
+        for x in 0..PREVIEW_SIZE {
+            let cell_kind = if filled[y][x] { kind } else { None };
             row = row.child(render_preview_cell(cell_kind, cell_size));
         }
         rows.push(row);
