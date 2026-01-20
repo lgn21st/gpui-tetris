@@ -4,6 +4,17 @@ use crate::game::pieces::{spawn_position, Rotation, Tetromino, TetrominoType};
 
 const NEXT_QUEUE_SIZE: usize = 5;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SoundEvent {
+    Move,
+    Rotate,
+    SoftDrop,
+    HardDrop,
+    LineClear(u8),
+    GameOver,
+    Hold,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct GameConfig {
     pub tick_ms: u64,
@@ -47,6 +58,7 @@ pub struct GameState {
     pub drop_timer_ms: u64,
     pub lock_timer_ms: u64,
     pub line_clear_timer_ms: u64,
+    sound_events: Vec<SoundEvent>,
     rng: SimpleRng,
 }
 
@@ -82,6 +94,7 @@ impl GameState {
             drop_timer_ms: 0,
             lock_timer_ms: 0,
             line_clear_timer_ms: 0,
+            sound_events: Vec::new(),
             rng,
         }
     }
@@ -97,6 +110,7 @@ impl GameState {
 
         if !self.board.can_place(&self.active, self.active.x, self.active.y, self.active.rotation) {
             self.game_over = true;
+            self.sound_events.push(SoundEvent::GameOver);
         }
     }
 
@@ -106,6 +120,7 @@ impl GameState {
         }
 
         self.line_clear_timer_ms = 180;
+        self.sound_events.push(SoundEvent::LineClear(cleared as u8));
         self.lines += cleared as u32;
         let level = self.level + 1;
         let points = match cleared {
@@ -195,15 +210,18 @@ impl GameState {
         match action {
             GameAction::MoveLeft => {
                 self.try_move(-1, 0);
+                self.sound_events.push(SoundEvent::Move);
             }
             GameAction::MoveRight => {
                 self.try_move(1, 0);
+                self.sound_events.push(SoundEvent::Move);
             }
             GameAction::SoftDrop => {
                 if self.try_move(0, 1) {
                     self.score = self.score.saturating_add(1);
                 }
                 self.activate_soft_drop();
+                self.sound_events.push(SoundEvent::SoftDrop);
             }
             GameAction::HardDrop => {
                 let mut dropped = 0;
@@ -213,6 +231,7 @@ impl GameState {
                 if dropped > 0 {
                     self.score = self.score.saturating_add(dropped * 2);
                 }
+                self.sound_events.push(SoundEvent::HardDrop);
                 self.board.lock_piece(&self.active);
                 let cleared = self.board.clear_lines();
                 self.apply_line_clear(cleared);
@@ -222,9 +241,11 @@ impl GameState {
             }
             GameAction::RotateCw => {
                 self.try_rotate(true);
+                self.sound_events.push(SoundEvent::Rotate);
             }
             GameAction::RotateCcw => {
                 self.try_rotate(false);
+                self.sound_events.push(SoundEvent::Rotate);
             }
             GameAction::Hold => {
                 if !self.can_hold {
@@ -240,6 +261,7 @@ impl GameState {
                     self.spawn_next();
                 }
                 self.can_hold = false;
+                self.sound_events.push(SoundEvent::Hold);
             }
             GameAction::Pause => {
                 self.paused = !self.paused;
@@ -258,8 +280,13 @@ impl GameState {
             .can_place(&piece, piece.x, piece.y, piece.rotation)
         {
             self.game_over = true;
+            self.sound_events.push(SoundEvent::GameOver);
         }
         piece
+    }
+
+    pub fn take_sound_events(&mut self) -> Vec<SoundEvent> {
+        std::mem::take(&mut self.sound_events)
     }
 
     pub fn reset(&mut self) {
