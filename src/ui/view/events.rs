@@ -51,6 +51,14 @@ impl TetrisView {
             _ => {}
         }
 
+        if event.keystroke.key.as_str() == "f"
+            && event.keystroke.modifiers.control
+            && event.keystroke.modifiers.platform
+        {
+            window.activate_window();
+            window.toggle_fullscreen();
+        }
+
         if !self.focus_handle.is_focused(window) {
             self.focus_handle.focus(window);
         }

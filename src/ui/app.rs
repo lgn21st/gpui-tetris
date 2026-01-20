@@ -60,14 +60,20 @@ pub fn run() {
             KeyBinding::new("p", Pause, None),
             KeyBinding::new("r", Restart, None),
         ]);
-        cx.set_menus(vec![Menu {
-            name: "gpui-tetris".into(),
-            items: vec![
-                MenuItem::os_submenu("Services", SystemMenuType::Services),
-                MenuItem::separator(),
-                MenuItem::action("Quit", Quit),
-            ],
-        }]);
+        cx.set_menus(vec![
+            Menu {
+                name: "gpui-tetris".into(),
+                items: vec![
+                    MenuItem::os_submenu("Services", SystemMenuType::Services),
+                    MenuItem::separator(),
+                    MenuItem::action("Quit", Quit),
+                ],
+            },
+            Menu {
+                name: "View".into(),
+                items: vec![MenuItem::action("Toggle Full Screen", ToggleFullscreen)],
+            },
+        ]);
 
         let window = cx
             .open_window(options, move |_, cx| {
@@ -80,10 +86,21 @@ pub fn run() {
         cx.on_action({
             let window = window_handle.clone();
             move |_: &ToggleFullscreen, cx| {
-                let _ = window.update(cx, |_, window, _| window.toggle_fullscreen());
+                let target = cx
+                    .active_window()
+                    .unwrap_or_else(|| window.clone().into());
+                cx.defer(move |cx| {
+                    let _ = target.update(cx, |_, window, _| {
+                        window.activate_window();
+                        window.toggle_fullscreen();
+                    });
+                });
             }
         });
-        cx.bind_keys([KeyBinding::new("cmd-ctrl-f", ToggleFullscreen, None)]);
+        cx.bind_keys([
+            KeyBinding::new("cmd-ctrl-f", ToggleFullscreen, None),
+            KeyBinding::new("ctrl-cmd-f", ToggleFullscreen, None),
+        ]);
         let view = window.update(cx, |_, _, cx| cx.entity()).unwrap();
 
         register_action::<MoveLeft>(cx, view.clone(), GameAction::MoveLeft);
