@@ -300,6 +300,18 @@ impl GameState {
         std::mem::take(&mut self.sound_events)
     }
 
+    pub fn is_line_clear_active(&self) -> bool {
+        self.line_clear_timer_ms > 0
+    }
+
+    pub fn lock_reset_remaining(&self) -> u32 {
+        self.lock_reset_limit.saturating_sub(self.lock_reset_count)
+    }
+
+    pub fn is_grounded(&self) -> bool {
+        !self.can_move_down()
+    }
+
     pub fn reset(&mut self) {
         let seed = self.rng.next_u32() as u64;
         let config = GameConfig {

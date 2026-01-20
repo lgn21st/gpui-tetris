@@ -152,12 +152,18 @@ impl Render for TetrisView {
         window.request_animation_frame();
         self.play_sound_events();
 
-        let active_blocks = self.state.active.blocks(self.state.active.rotation);
-        let mut active_cells = Vec::with_capacity(4);
-        for (dx, dy) in active_blocks.iter() {
-            active_cells.push((self.state.active.x + dx, self.state.active.y + dy));
-        }
-        let ghost_cells = self.state.ghost_blocks();
+        let show_active = !self.state.is_line_clear_active();
+        let mut active_cells = Vec::new();
+        let ghost_cells = if show_active {
+            let active_blocks = self.state.active.blocks(self.state.active.rotation);
+            active_cells = Vec::with_capacity(4);
+            for (dx, dy) in active_blocks.iter() {
+                active_cells.push((self.state.active.x + dx, self.state.active.y + dy));
+            }
+            self.state.ghost_blocks()
+        } else {
+            [(0, 0); 4]
+        };
 
         let mut rows = Vec::new();
         for y in 0..BOARD_ROWS as i32 {
@@ -165,9 +171,10 @@ impl Render for TetrisView {
             for x in 0..BOARD_COLS as i32 {
                 let mut cell_kind = self.state.board.cells[y as usize][x as usize].kind;
                 let mut is_ghost = false;
-                if active_cells.iter().any(|(ax, ay)| *ax == x && *ay == y) {
+                if show_active && active_cells.iter().any(|(ax, ay)| *ax == x && *ay == y) {
                     cell_kind = Some(self.state.active.kind);
-                } else if ghost_cells.iter().any(|(gx, gy)| *gx == x && *gy == y) {
+                } else if show_active && ghost_cells.iter().any(|(gx, gy)| *gx == x && *gy == y)
+                {
                     cell_kind = Some(self.state.active.kind);
                     is_ghost = true;
                 }
@@ -244,6 +251,23 @@ impl Render for TetrisView {
                                         } else {
                                             "Playing"
                                         }
+                                    ))
+                                    .child(format!(
+                                        "Hold: {}",
+                                        if self.state.can_hold {
+                                            "Ready"
+                                        } else {
+                                            "Used"
+                                        }
+                                    ))
+                                    .child(format!(
+                                        "Grounded: {}",
+                                        if self.state.is_grounded() { "Yes" } else { "No" }
+                                    ))
+                                    .child(format!(
+                                        "Lock resets: {}/{}",
+                                        self.state.lock_reset_remaining(),
+                                        self.state.lock_reset_limit
                                     )),
                             )
                             .child(
