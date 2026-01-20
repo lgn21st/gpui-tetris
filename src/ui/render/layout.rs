@@ -1,7 +1,5 @@
 use gpui::{IntoElement, div, prelude::*, px};
 
-use gpui_tetris::game::input::GameAction;
-
 use crate::ui::render::theme;
 use crate::ui::render::{
     render_cell, render_game_over_tint, render_line_clear_flash, render_lock_bar,
@@ -139,35 +137,22 @@ pub fn render_panel(ui: &UiState, layout: &RenderLayout) -> impl IntoElement + u
         .child(
             div()
                 .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
-                .child(format!(
-                    "Last input: {}",
-                    ui.last_action.as_ref().map(action_label).unwrap_or("None")
-                )),
+                .child(ui.panel_labels.last_input.clone()),
         )
         .child(
             div()
                 .flex()
                 .flex_col()
                 .gap(px(layout.gap * 0.2))
-                .child(format!("Score: {}", ui.state.score))
-                .child(format!("Level: {}", ui.state.level))
-                .child(format!("Lines: {}", ui.state.lines))
-                .child(format!("Status: {}", ui.status_label()))
-                .child(format!("Rules: {}", ui.ruleset_label()))
-                .child(format!(
-                    "Hold: {}",
-                    if ui.state.can_hold { "Ready" } else { "Used" }
-                ))
-                .child(format!(
-                    "Grounded: {}",
-                    if ui.state.is_grounded() { "Yes" } else { "No" }
-                ))
-                .child(format!(
-                    "Lock resets: {}/{}",
-                    ui.state.lock_reset_remaining(),
-                    ui.state.lock_reset_limit
-                ))
-                .child(format!("SFX: {}", ui.sfx_volume_label()))
+                .child(ui.panel_labels.score.clone())
+                .child(ui.panel_labels.level.clone())
+                .child(ui.panel_labels.lines.clone())
+                .child(ui.panel_labels.status.clone())
+                .child(ui.panel_labels.ruleset.clone())
+                .child(ui.panel_labels.hold.clone())
+                .child(ui.panel_labels.grounded.clone())
+                .child(ui.panel_labels.lock_resets.clone())
+                .child(ui.panel_labels.sfx.clone())
                 .child(if ui.state.is_classic_ruleset() {
                     div().hidden()
                 } else {
@@ -175,18 +160,8 @@ pub fn render_panel(ui: &UiState, layout: &RenderLayout) -> impl IntoElement + u
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(format!(
-                            "Combo: {}",
-                            if ui.state.combo >= 0 {
-                                ui.state.combo.to_string()
-                            } else {
-                                "-".to_string()
-                            }
-                        ))
-                        .child(format!(
-                            "B2B: {}",
-                            if ui.state.back_to_back { "Yes" } else { "No" }
-                        ))
+                        .child(ui.panel_labels.combo.clone())
+                        .child(ui.panel_labels.b2b.clone())
                         .child(if ui.state.back_to_back {
                             div()
                                 .text_sm()
@@ -230,18 +205,4 @@ pub fn render_panel(ui: &UiState, layout: &RenderLayout) -> impl IntoElement + u
                     layout.cell_size,
                 )),
         )
-}
-
-fn action_label(action: &GameAction) -> &'static str {
-    match action {
-        GameAction::MoveLeft => "Left",
-        GameAction::MoveRight => "Right",
-        GameAction::SoftDrop => "Soft Drop",
-        GameAction::HardDrop => "Hard Drop",
-        GameAction::RotateCw => "Rotate CW",
-        GameAction::RotateCcw => "Rotate CCW",
-        GameAction::Hold => "Hold",
-        GameAction::Pause => "Pause",
-        GameAction::Restart => "Restart",
-    }
 }

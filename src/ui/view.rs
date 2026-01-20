@@ -49,27 +49,12 @@ impl Render for TetrisView {
         let scale = compute_scale(window);
         let layout = RenderLayout::new(scale);
         let now = Instant::now();
-        let focused = self.focus_handle.is_focused(window);
-        if self.was_focused && !focused {
-            self.handle_focus_lost();
-        }
-        self.was_focused = focused;
-        let controller_actions = self.input.poll_controller();
-        self.apply_input_actions(controller_actions);
+        let focused = self.update_focus(window);
+        self.advance_frame(now);
 
-        if let Some(prev) = self.last_tick {
-            let elapsed_ms = now.duration_since(prev).as_millis() as u64;
-            if elapsed_ms > 0 && self.ui.started && !self.ui.show_settings {
-                self.ui.state.tick(elapsed_ms, false);
-                let repeat_actions = self
-                    .input
-                    .apply_repeats(elapsed_ms, self.ui.can_accept_game_input());
-                self.apply_input_actions(repeat_actions);
-            }
-        }
-        self.last_tick = Some(now);
         window.request_animation_frame();
         self.play_sound_events();
+        self.ui.sync_panel_labels();
 
         let board = {
             let ui = &mut self.ui;
@@ -102,6 +87,33 @@ impl TetrisView {
                 audio.play(event);
             }
         }
+    }
+
+    fn update_focus(&mut self, window: &Window) -> bool {
+        let focused = self.focus_handle.is_focused(window);
+        if self.was_focused && !focused {
+            self.handle_focus_lost();
+        }
+        self.was_focused = focused;
+        focused
+    }
+
+    fn advance_frame(&mut self, now: Instant) {
+        let controller_actions = self.input.poll_controller();
+        self.apply_input_actions(controller_actions);
+
+        if let Some(prev) = self.last_tick {
+            let elapsed_ms = now.duration_since(prev).as_millis() as u64;
+            if elapsed_ms > 0 && self.ui.started && !self.ui.show_settings {
+                self.ui.state.tick(elapsed_ms, false);
+                self.ui.mark_labels_dirty();
+                let repeat_actions = self
+                    .input
+                    .apply_repeats(elapsed_ms, self.ui.can_accept_game_input());
+                self.apply_input_actions(repeat_actions);
+            }
+        }
+        self.last_tick = Some(now);
     }
 }
 

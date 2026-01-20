@@ -32,9 +32,7 @@ impl TetrisView {
                 self.ui.reset_settings();
             }
             "escape" => {
-                if self.ui.show_settings {
-                    self.ui.show_settings = false;
-                }
+                self.ui.close_settings();
             }
             "left" => {
                 if !self.ui.can_accept_game_input() {
@@ -88,17 +86,12 @@ impl TetrisView {
 
     pub(super) fn apply_input_actions(&mut self, actions: Vec<InputAction>) {
         for entry in actions {
-            self.ui.handle_action(entry.action);
-            if entry.record {
-                self.ui.last_action = Some(entry.action);
-            }
+            self.ui.apply_action(entry.action, entry.record);
         }
     }
 
     pub(super) fn handle_focus_lost(&mut self) {
         self.input.clear_focus_state();
-        if self.ui.started && !self.ui.state.game_over {
-            self.ui.state.paused = true;
-        }
+        self.ui.pause_from_focus_loss();
     }
 }

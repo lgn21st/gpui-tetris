@@ -39,7 +39,7 @@ pub fn render_preview(kind: Option<&TetrominoType>, cell_size: f32) -> impl Into
         }
     }
 
-    let mut rows = Vec::new();
+    let mut rows = Vec::with_capacity(PREVIEW_SIZE as usize);
     for y in 0..PREVIEW_SIZE {
         let mut row = div().flex();
         for x in 0..PREVIEW_SIZE {
