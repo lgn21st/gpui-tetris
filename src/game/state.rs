@@ -91,7 +91,7 @@ impl GameState {
             landing_flash_timer_ms: 0,
             last_lock_cells: [(0, 0); 4],
             ghost_cache: [(0, 0); 4],
-            board_revision: 0,
+            board_revision: 1,
             sound_events: Vec::new(),
             last_action_rotate: false,
             rng,
