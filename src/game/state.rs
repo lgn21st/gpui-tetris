@@ -8,6 +8,7 @@ pub struct GameConfig {
     pub soft_drop_multiplier: u64,
     pub lock_delay_ms: u64,
     pub base_drop_ms: u64,
+    pub soft_drop_grace_ms: u64,
 }
 
 impl Default for GameConfig {
@@ -17,6 +18,7 @@ impl Default for GameConfig {
             soft_drop_multiplier: 10,
             lock_delay_ms: 500,
             base_drop_ms: 1000,
+            soft_drop_grace_ms: 150,
         }
     }
 }
@@ -37,6 +39,9 @@ pub struct GameState {
     pub soft_drop_multiplier: u64,
     pub lock_delay_ms: u64,
     pub base_drop_ms: u64,
+    pub soft_drop_grace_ms: u64,
+    pub soft_drop_active: bool,
+    pub soft_drop_timeout_ms: u64,
     pub drop_timer_ms: u64,
     pub lock_timer_ms: u64,
     rng: SimpleRng,
@@ -67,6 +72,9 @@ impl GameState {
             soft_drop_multiplier: config.soft_drop_multiplier,
             lock_delay_ms: config.lock_delay_ms,
             base_drop_ms: config.base_drop_ms,
+            soft_drop_grace_ms: config.soft_drop_grace_ms,
+            soft_drop_active: false,
+            soft_drop_timeout_ms: 0,
             drop_timer_ms: 0,
             lock_timer_ms: 0,
             rng,
@@ -132,7 +140,13 @@ impl GameState {
         }
 
         self.drop_timer_ms = self.drop_timer_ms.saturating_add(elapsed_ms);
-        let interval = self.drop_interval_ms(soft_drop);
+        if self.soft_drop_timeout_ms > 0 {
+            self.soft_drop_timeout_ms = self.soft_drop_timeout_ms.saturating_sub(elapsed_ms);
+            if self.soft_drop_timeout_ms == 0 {
+                self.soft_drop_active = false;
+            }
+        }
+        let interval = self.drop_interval_ms(soft_drop || self.soft_drop_active);
 
         while self.drop_timer_ms >= interval {
             self.drop_timer_ms -= interval;
@@ -164,6 +178,7 @@ impl GameState {
             }
             GameAction::SoftDrop => {
                 self.try_move(0, 1);
+                self.activate_soft_drop();
             }
             GameAction::HardDrop => {
                 while self.try_move(0, 1) {}
@@ -223,8 +238,18 @@ impl GameState {
             soft_drop_multiplier: self.soft_drop_multiplier,
             lock_delay_ms: self.lock_delay_ms,
             base_drop_ms: self.base_drop_ms,
+            soft_drop_grace_ms: self.soft_drop_grace_ms,
         };
         *self = GameState::new(seed, config);
+    }
+
+    pub fn activate_soft_drop(&mut self) {
+        self.soft_drop_active = true;
+        self.soft_drop_timeout_ms = self.soft_drop_grace_ms;
+    }
+
+    pub fn is_soft_drop_active(&self) -> bool {
+        self.soft_drop_active
     }
 
     pub fn ghost_blocks(&self) -> [(i32, i32); 4] {

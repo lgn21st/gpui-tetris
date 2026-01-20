@@ -62,6 +62,7 @@ PRs should include:
 - Tick logic and lock delay implemented in `GameState`, driven by per-frame updates.
 - Board renders active + ghost pieces with next/hold previews.
 - Pause/game-over overlay rendered on the board.
+- Soft drop uses a short input-driven grace window.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

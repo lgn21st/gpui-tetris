@@ -23,15 +23,17 @@ fn tick_uses_soft_drop_interval() {
     let config = GameConfig {
         base_drop_ms: 1000,
         soft_drop_multiplier: 10,
+        soft_drop_grace_ms: 200,
         ..GameConfig::default()
     };
     let mut state = GameState::new(2, config);
     let start_y = state.active.y;
 
-    state.tick(99, true);
+    state.activate_soft_drop();
+    state.tick(99, false);
     assert_eq!(state.active.y, start_y);
 
-    state.tick(1, true);
+    state.tick(1, false);
     assert_eq!(state.active.y, start_y + 1);
 }
 
@@ -67,4 +69,18 @@ fn tick_does_not_advance_when_paused() {
 
     state.tick(1000, false);
     assert_eq!(state.active.y, start_y);
+}
+
+#[test]
+fn soft_drop_expires_after_grace_period() {
+    let config = GameConfig {
+        soft_drop_grace_ms: 100,
+        ..GameConfig::default()
+    };
+    let mut state = GameState::new(5, config);
+    state.activate_soft_drop();
+    assert!(state.is_soft_drop_active());
+
+    state.tick(100, false);
+    assert!(!state.is_soft_drop_active());
 }
