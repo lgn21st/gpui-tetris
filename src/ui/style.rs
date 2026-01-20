@@ -12,6 +12,8 @@ pub const BASE_CELL_SIZE: f32 = CELL_SIZE;
 
 pub const BOARD_COLS: f32 = 10.0;
 pub const BOARD_ROWS: f32 = 20.0;
+pub const BOARD_COLS_USIZE: usize = 10;
+pub const BOARD_ROWS_USIZE: usize = 20;
 pub const BASE_PADDING: f32 = 16.0;
 pub const BASE_GAP: f32 = 16.0;
 pub const DEFAULT_SFX_VOLUME: f32 = 0.7;

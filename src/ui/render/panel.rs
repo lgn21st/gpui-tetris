@@ -1,5 +1,6 @@
-use gpui::{IntoElement, div, prelude::*, px, rgb};
+use gpui::{IntoElement, div, prelude::*, px};
 
+use crate::ui::render::theme;
 use crate::ui::style::BASE_PANEL_TEXT;
 
 pub fn render_lock_bar(
@@ -20,11 +21,11 @@ pub fn render_lock_bar(
     let ratio = (lock_timer_ms as f32 / lock_delay_ms as f32).clamp(0.0, 1.0);
     let fill_width = bar_width * ratio;
     let fill_color = if ratio > 0.8 {
-        rgb(0xf87171)
+        theme::lock_bar_danger()
     } else if ratio > 0.5 {
-        rgb(0xfbbf24)
+        theme::lock_bar_warn()
     } else {
-        rgb(0x34d399)
+        theme::lock_bar_safe()
     };
 
     div()
@@ -40,9 +41,9 @@ pub fn render_lock_bar(
             div()
                 .w(px(bar_width))
                 .h(px(bar_height))
-                .bg(rgb(0x1f2937))
+                .bg(theme::lock_bar_bg())
                 .border(px(1.0))
-                .border_color(rgb(0x374151))
+                .border_color(theme::lock_bar_border())
                 .child(div().w(px(fill_width)).h(px(bar_height)).bg(fill_color)),
         )
 }

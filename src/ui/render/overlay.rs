@@ -1,5 +1,6 @@
-use gpui::{IntoElement, div, prelude::*, px, rgb};
+use gpui::{IntoElement, div, prelude::*, px};
 
+use crate::ui::render::theme;
 use crate::ui::style::{BASE_HINT_TEXT, BASE_TITLE_TEXT};
 
 pub fn render_overlay(
@@ -21,14 +22,14 @@ pub fn render_overlay(
             .left_0()
             .right_0()
             .bottom_0()
-            .bg(rgb(0x000000))
+            .bg(theme::overlay_bg())
             .opacity(0.86)
             .flex()
             .flex_col()
             .gap_2()
             .justify_center()
             .items_center()
-            .text_color(rgb(0xf5f5f5))
+            .text_color(theme::overlay_text())
             .text_size(px(title_size))
             .child("Settings")
             .child(div().text_size(px(hint_size)).child(format!(
@@ -51,14 +52,14 @@ pub fn render_overlay(
             .left_0()
             .right_0()
             .bottom_0()
-            .bg(rgb(0x000000))
+            .bg(theme::overlay_bg())
             .opacity(0.86)
             .flex()
             .flex_col()
             .gap_2()
             .justify_center()
             .items_center()
-            .text_color(rgb(0xf5f5f5))
+            .text_color(theme::overlay_text())
             .text_size(px(title_size))
             .child("gpui‑tetris")
             .child(
@@ -79,14 +80,14 @@ pub fn render_overlay(
             .left_0()
             .right_0()
             .bottom_0()
-            .bg(rgb(0x000000))
+            .bg(theme::overlay_bg())
             .opacity(0.78)
             .flex()
             .flex_col()
             .gap_2()
             .justify_center()
             .items_center()
-            .text_color(rgb(0xf5f5f5))
+            .text_color(theme::overlay_text())
             .text_size(px(title_size))
             .child("Click to Focus");
     }
@@ -104,14 +105,14 @@ pub fn render_overlay(
         .left_0()
         .right_0()
         .bottom_0()
-        .bg(rgb(0x000000))
+        .bg(theme::overlay_bg())
         .opacity(0.82)
         .flex()
         .flex_col()
         .gap_2()
         .justify_center()
         .items_center()
-        .text_color(rgb(0xf5f5f5))
+        .text_color(theme::overlay_text())
         .text_size(px(title_size))
         .child(label)
         .child(div().text_size(px(hint_size)).child(hint))

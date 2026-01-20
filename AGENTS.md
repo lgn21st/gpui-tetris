@@ -14,6 +14,7 @@ Goal: build a desktop Tetris game in Rust using `gpui`.
     - `ui/input.rs`: keyboard/controller repeat handling.
     - `ui/ui_state.rs`: session state + HUD labels + SFX toggles.
     - `ui/render/`: board/panel/overlay render helpers.
+      - `ui/render/theme.rs`: shared color palette helpers.
 - `assets/`: optional images/fonts/sfx.
 - `docs/`: design notes and diagrams.
 - `tests/`: unit tests for rules/board state.

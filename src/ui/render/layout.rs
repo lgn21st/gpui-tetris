@@ -1,12 +1,13 @@
-use gpui::{IntoElement, div, prelude::*, px, rgb};
+use gpui::{IntoElement, div, prelude::*, px};
 
 use gpui_tetris::game::input::GameAction;
 
+use crate::ui::render::theme;
 use crate::ui::render::{
     render_cell, render_game_over_tint, render_line_clear_flash, render_lock_bar,
     render_lock_warning, render_overlay, render_preview,
 };
-use crate::ui::style::{BASE_PANEL_TEXT, BOARD_COLS, BOARD_ROWS};
+use crate::ui::style::{BASE_PANEL_TEXT, BOARD_COLS_USIZE, BOARD_ROWS_USIZE};
 use crate::ui::ui_state::UiState;
 
 pub fn render_board(
@@ -18,12 +19,12 @@ pub fn render_board(
     scale: f32,
 ) -> impl IntoElement {
     let show_active = !ui.state.is_line_clear_active();
-    let cols = BOARD_COLS as i32;
-    let rows = BOARD_ROWS as i32;
-    let mask_len = (cols * rows) as usize;
-    let mut flash_mask = vec![false; mask_len];
-    let mut active_mask = vec![false; mask_len];
-    let mut ghost_mask = vec![false; mask_len];
+    const BOARD_CELLS: usize = BOARD_COLS_USIZE * BOARD_ROWS_USIZE;
+    let cols = BOARD_COLS_USIZE as i32;
+    let rows = BOARD_ROWS_USIZE as i32;
+    let mut flash_mask = [false; BOARD_CELLS];
+    let mut active_mask = [false; BOARD_CELLS];
+    let mut ghost_mask = [false; BOARD_CELLS];
 
     let set_mask = |mask: &mut [bool], x: i32, y: i32| {
         if x >= 0 && x < cols && y >= 0 && y < rows {
@@ -51,10 +52,10 @@ pub fn render_board(
         }
     }
 
-    let mut rows = Vec::with_capacity(BOARD_ROWS as usize);
-    for y in 0..BOARD_ROWS as i32 {
+    let mut rows = Vec::with_capacity(BOARD_ROWS_USIZE);
+    for y in 0..BOARD_ROWS_USIZE as i32 {
         let mut row = div().flex();
-        for x in 0..BOARD_COLS as i32 {
+        for x in 0..BOARD_COLS_USIZE as i32 {
             let mut cell_kind = ui.state.board.cells[y as usize][x as usize].kind;
             let mut is_ghost = false;
             let idx = (y as usize * cols as usize) + x as usize;
@@ -75,9 +76,9 @@ pub fn render_board(
     div()
         .w(px(board_width))
         .h(px(board_height))
-        .bg(rgb(0x1c1c1c))
+        .bg(theme::board_bg())
         .border(px(1.0))
-        .border_color(rgb(0x2e2e2e))
+        .border_color(theme::border())
         .relative()
         .child(div().flex().flex_col().children(rows))
         .child(render_line_clear_flash(ui.state.line_clear_timer_ms > 0))
@@ -107,15 +108,15 @@ pub fn render_panel(
     div()
         .w(px(panel_width.max(cell_size * 4.0)))
         .h(px(board_height))
-        .bg(rgb(0x1a1a1a))
+        .bg(theme::panel_bg())
         .border(px(1.0))
-        .border_color(rgb(0x2e2e2e))
+        .border_color(theme::border())
         .p(px(padding * 0.75))
         .flex()
         .flex_col()
         .gap(px(gap * 0.6))
         .text_size(px(BASE_PANEL_TEXT * scale))
-        .text_color(rgb(0xe6e6e6))
+        .text_color(theme::panel_text())
         .child(
             div()
                 .text_size(px(BASE_PANEL_TEXT * scale * 0.95))
@@ -170,7 +171,7 @@ pub fn render_panel(
                         .child(if ui.state.back_to_back {
                             div()
                                 .text_sm()
-                                .text_color(rgb(0xfacc15))
+                                .text_color(theme::b2b_text())
                                 .child("B2B bonus active")
                         } else {
                             div().hidden()

@@ -2,6 +2,7 @@ mod board;
 mod layout;
 mod overlay;
 mod panel;
+pub mod theme;
 
 pub use board::{
     render_cell, render_game_over_tint, render_line_clear_flash, render_lock_warning,
