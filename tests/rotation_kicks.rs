@@ -47,11 +47,23 @@ fn rotate_fails_when_all_kicks_blocked() {
     state.active = Tetromino::new(TetrominoType::T, 0, 0);
     state.active.rotation = Rotation::North;
 
-    for (x, y) in [(0, 0), (1, 0), (2, 0), (3, 0)].iter() {
+    for (x, y) in [(0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1)].iter() {
         state.board.cells[*y][*x].filled = true;
         state.board.cells[*y][*x].kind = Some(TetrominoType::O);
     }
 
     state.apply_action(GameAction::RotateCw);
     assert_eq!(state.active.rotation, Rotation::North);
+}
+
+#[test]
+fn rotate_kicks_up_from_floor() {
+    let mut state = GameState::new(5, GameConfig::default());
+    state.board = Board::new();
+    state.active = Tetromino::new(TetrominoType::I, 3, 18);
+    state.active.rotation = Rotation::North;
+
+    state.apply_action(GameAction::RotateCw);
+    assert_eq!(state.active.rotation, Rotation::East);
+    assert!(state.active.y < 18);
 }

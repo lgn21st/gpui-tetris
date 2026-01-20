@@ -332,6 +332,11 @@ fn render_overlay(paused: bool, game_over: bool) -> impl IntoElement {
     }
 
     let label = if game_over { "Game Over" } else { "Paused" };
+    let hint = if game_over {
+        "Press R to restart"
+    } else {
+        "Press P to resume"
+    };
 
     div()
         .absolute()
@@ -342,11 +347,14 @@ fn render_overlay(paused: bool, game_over: bool) -> impl IntoElement {
         .bg(rgb(0x000000))
         .opacity(0.75)
         .flex()
+        .flex_col()
+        .gap_2()
         .justify_center()
         .items_center()
         .text_xl()
         .text_color(rgb(0xffffff))
         .child(label)
+        .child(div().text_sm().child(hint))
 }
 fn register_action<A: Action + 'static>(
     cx: &mut App,
