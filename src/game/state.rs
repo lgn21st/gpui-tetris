@@ -214,6 +214,9 @@ impl GameState {
         if self.game_over && action != GameAction::Restart {
             return;
         }
+        if self.paused && action != GameAction::Pause && action != GameAction::Restart {
+            return;
+        }
 
         match action {
             GameAction::MoveLeft => {

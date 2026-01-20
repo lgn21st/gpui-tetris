@@ -14,6 +14,7 @@ pub struct AudioEngine {
 }
 
 const MASTER_GAIN: f32 = 0.6;
+const MAX_VOICES: usize = 16;
 
 impl AudioEngine {
     pub fn new(asset_dir: &Path) -> anyhow::Result<Self> {
@@ -190,7 +191,7 @@ fn render_audio(
                     gain: sound_event_gain(&event) * MASTER_GAIN,
                 };
                 if let Ok(mut guard) = voices.lock() {
-                    guard.push(voice);
+                    push_voice(&mut guard, voice);
                 }
             }
         }
@@ -287,4 +288,40 @@ pub fn sound_event_gain(event: &SoundEvent) -> f32 {
 
 fn soft_clip(sample: f32) -> f32 {
     sample / (1.0 + sample.abs())
+}
+
+fn push_voice(voices: &mut Vec<Voice>, voice: Voice) {
+    if voices.len() >= MAX_VOICES {
+        voices.remove(0);
+    }
+    voices.push(voice);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_voice(gain: f32) -> Voice {
+        Voice {
+            samples: Arc::new(vec![0.0; 4]),
+            channels: 1,
+            position: 0.0,
+            step: 1.0,
+            gain,
+        }
+    }
+
+    #[test]
+    fn push_voice_caps_active_voices() {
+        let mut voices = Vec::new();
+        for i in 0..MAX_VOICES {
+            push_voice(&mut voices, test_voice(i as f32));
+        }
+        assert_eq!(voices.len(), MAX_VOICES);
+
+        push_voice(&mut voices, test_voice(99.0));
+        assert_eq!(voices.len(), MAX_VOICES);
+        assert!(voices.iter().any(|voice| voice.gain == 99.0));
+        assert!(!voices.iter().any(|voice| voice.gain == 0.0));
+    }
 }

@@ -62,6 +62,7 @@ PRs should include:
 - Tick logic and lock delay implemented in `GameState`, driven by per-frame updates.
 - Board renders active + ghost pieces with next/hold previews.
 - Pause/game-over overlay rendered on the board.
+- Paused state blocks gameplay inputs except pause/restart.
 - Soft drop uses a short input-driven grace window.
 - Soft/hard drops award per-cell points; movement/rotation resets lock timer.
 - Lock delay resets are capped while grounded to avoid infinite stalls.

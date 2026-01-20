@@ -53,3 +53,22 @@ fn game_over_blocks_actions_except_restart() {
     state.apply_action(GameAction::Restart);
     assert!(!state.game_over);
 }
+
+#[test]
+fn paused_blocks_actions_except_pause_and_restart() {
+    let mut state = GameState::new(5, GameConfig::default());
+    state.paused = true;
+    let start_x = state.active.x;
+    let start_rotation = state.active.rotation;
+
+    state.apply_action(GameAction::MoveLeft);
+    state.apply_action(GameAction::RotateCw);
+    state.apply_action(GameAction::SoftDrop);
+
+    assert_eq!(state.active.x, start_x);
+    assert_eq!(state.active.rotation, start_rotation);
+    assert!(state.paused);
+
+    state.apply_action(GameAction::Pause);
+    assert!(!state.paused);
+}
