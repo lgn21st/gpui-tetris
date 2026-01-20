@@ -1,50 +1,23 @@
-use crate::game::board::{Board, BOARD_HEIGHT};
+use crate::game::board::{BOARD_HEIGHT, Board};
 use crate::game::input::GameAction;
-use crate::game::pieces::{spawn_position, Rotation, Tetromino, TetrominoType};
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
+
+mod actions;
+mod kicks;
+mod rng;
+mod scoring;
+mod timing;
+mod types;
+
+use actions::{
+    activate_soft_drop, apply_action, can_move_down, ghost_blocks, lock_active_piece, try_move,
+};
+use rng::{SimpleRng, ensure_queue, refill_bag};
+use scoring::apply_line_clear;
+use timing::{drop_interval_ms, tick};
+pub use types::{GameConfig, Ruleset, SoundEvent, TSpinKind};
 
 const NEXT_QUEUE_SIZE: usize = 5;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SoundEvent {
-    Move,
-    Rotate,
-    SoftDrop,
-    HardDrop,
-    LineClear(u8),
-    GameOver,
-    Hold,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ruleset {
-    Classic,
-    Modern,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct GameConfig {
-    pub tick_ms: u64,
-    pub soft_drop_multiplier: u64,
-    pub lock_delay_ms: u64,
-    pub lock_reset_limit: u32,
-    pub base_drop_ms: u64,
-    pub soft_drop_grace_ms: u64,
-    pub ruleset: Ruleset,
-}
-
-impl Default for GameConfig {
-    fn default() -> Self {
-        Self {
-            tick_ms: 16,
-            soft_drop_multiplier: 10,
-            lock_delay_ms: 450,
-            lock_reset_limit: 15,
-            base_drop_ms: 1000,
-            soft_drop_grace_ms: 150,
-            ruleset: Ruleset::Classic,
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct GameState {
@@ -136,82 +109,19 @@ impl GameState {
         self.lock_reset_count = 0;
         self.last_action_rotate = false;
 
-        if !self.board.can_place(&self.active, self.active.x, self.active.y, self.active.rotation) {
+        if !self.board.can_place(
+            &self.active,
+            self.active.x,
+            self.active.y,
+            self.active.rotation,
+        ) {
             self.game_over = true;
             self.sound_events.push(SoundEvent::GameOver);
         }
     }
 
     pub fn apply_line_clear(&mut self, cleared: usize, t_spin: TSpinKind) {
-        let qualifies_b2b = (t_spin == TSpinKind::Full && cleared > 0) || cleared == 4;
-        let level = self.level + 1;
-        let mut points = if self.ruleset == Ruleset::Classic {
-            match cleared {
-                1 => 40,
-                2 => 100,
-                3 => 300,
-                4 => 1200,
-                _ => 0,
-            }
-        } else {
-            match t_spin {
-                TSpinKind::Full => match cleared {
-                    0 => 400,
-                    1 => 800,
-                    2 => 1200,
-                    3 => 1600,
-                    _ => 0,
-                },
-                TSpinKind::Mini => match cleared {
-                    0 => 100,
-                    1 => 200,
-                    2 => 400,
-                    _ => 0,
-                },
-                TSpinKind::None => match cleared {
-                    1 => 40,
-                    2 => 100,
-                    3 => 300,
-                    4 => 1200,
-                    _ => 0,
-                },
-            }
-        };
-
-        if self.ruleset == Ruleset::Modern && qualifies_b2b && self.back_to_back {
-            points = points * 3 / 2;
-        }
-
-        if cleared > 0 {
-            self.line_clear_timer_ms = 180;
-            self.sound_events.push(SoundEvent::LineClear(cleared as u8));
-            self.lines += cleared as u32;
-            if self.ruleset == Ruleset::Modern {
-                self.combo += 1;
-                if self.combo > 0 {
-                    points += 50 * self.combo as u32;
-                }
-                self.back_to_back = qualifies_b2b;
-            } else {
-                self.combo = -1;
-                self.back_to_back = false;
-            }
-
-            // Classic progression: advance level every 10 lines.
-            self.level = self.lines / 10;
-        } else {
-            if self.ruleset == Ruleset::Modern {
-                self.combo = -1;
-                self.back_to_back = false;
-            } else {
-                self.combo = -1;
-                self.back_to_back = false;
-            }
-        }
-
-        if points > 0 {
-            self.score += points * level;
-        }
+        apply_line_clear(self, cleared, t_spin);
     }
 
     pub fn is_lock_row(&self) -> bool {
@@ -219,154 +129,15 @@ impl GameState {
     }
 
     pub fn drop_interval_ms(&self, soft_drop: bool) -> u64 {
-        let mut interval = match self.level {
-            0 => 1000,
-            1 => 800,
-            2 => 650,
-            3 => 500,
-            4 => 400,
-            5 => 320,
-            6 => 250,
-            7 => 200,
-            8 => 160,
-            _ => 120,
-        };
-        interval = interval.min(self.base_drop_ms).max(100);
-        if soft_drop {
-            let adjusted = interval / self.soft_drop_multiplier.max(1);
-            return adjusted.max(1);
-        }
-        interval
+        drop_interval_ms(self, soft_drop)
     }
 
     pub fn tick(&mut self, elapsed_ms: u64, soft_drop: bool) {
-        if self.game_over || self.paused {
-            return;
-        }
-
-        if self.landing_flash_timer_ms > 0 {
-            self.landing_flash_timer_ms = self.landing_flash_timer_ms.saturating_sub(elapsed_ms);
-        }
-
-        if self.line_clear_timer_ms > 0 {
-            self.line_clear_timer_ms = self.line_clear_timer_ms.saturating_sub(elapsed_ms);
-            if self.line_clear_timer_ms > 0 {
-                return;
-            }
-        }
-
-        self.drop_timer_ms = self.drop_timer_ms.saturating_add(elapsed_ms);
-        if self.soft_drop_timeout_ms > 0 {
-            self.soft_drop_timeout_ms = self.soft_drop_timeout_ms.saturating_sub(elapsed_ms);
-            if self.soft_drop_timeout_ms == 0 {
-                self.soft_drop_active = false;
-            }
-        }
-        let interval = self.drop_interval_ms(soft_drop || self.soft_drop_active);
-
-        while self.drop_timer_ms >= interval {
-            self.drop_timer_ms -= interval;
-            let _ = self.try_move(0, 1);
-        }
-
-        if self.can_move_down() {
-            self.lock_timer_ms = 0;
-            self.lock_reset_count = 0;
-        } else {
-            self.lock_timer_ms = self.lock_timer_ms.saturating_add(elapsed_ms);
-            if self.lock_timer_ms >= self.lock_delay_ms {
-                self.lock_timer_ms = 0;
-                self.drop_timer_ms = 0;
-                self.lock_active_piece();
-            }
-        }
+        tick(self, elapsed_ms, soft_drop);
     }
 
     pub fn apply_action(&mut self, action: GameAction) {
-        if self.game_over && action != GameAction::Restart {
-            return;
-        }
-        if self.paused && action != GameAction::Pause && action != GameAction::Restart {
-            return;
-        }
-
-        match action {
-            GameAction::MoveLeft => {
-                self.try_move(-1, 0);
-                self.last_action_rotate = false;
-                self.sound_events.push(SoundEvent::Move);
-            }
-            GameAction::MoveRight => {
-                self.try_move(1, 0);
-                self.last_action_rotate = false;
-                self.sound_events.push(SoundEvent::Move);
-            }
-            GameAction::SoftDrop => {
-                if self.try_move(0, 1) {
-                    self.score = self.score.saturating_add(1);
-                }
-                self.activate_soft_drop();
-                self.last_action_rotate = false;
-                self.sound_events.push(SoundEvent::SoftDrop);
-            }
-            GameAction::HardDrop => {
-                let mut dropped = 0;
-                while self.try_move(0, 1) {
-                    dropped += 1;
-                }
-                if dropped > 0 {
-                    self.score = self.score.saturating_add(dropped * 2);
-                }
-                self.sound_events.push(SoundEvent::HardDrop);
-                self.lock_active_piece();
-                self.lock_timer_ms = 0;
-                self.drop_timer_ms = 0;
-            }
-            GameAction::RotateCw => {
-                self.last_action_rotate = self.try_rotate(true);
-                self.sound_events.push(SoundEvent::Rotate);
-            }
-            GameAction::RotateCcw => {
-                self.last_action_rotate = self.try_rotate(false);
-                self.sound_events.push(SoundEvent::Rotate);
-            }
-            GameAction::Hold => {
-                if !self.can_hold {
-                    return;
-                }
-
-                let current_kind = self.active.kind;
-                if let Some(held_kind) = self.hold {
-                    self.hold = Some(current_kind);
-                    self.active = self.spawn_piece(held_kind);
-                } else {
-                    self.hold = Some(current_kind);
-                    self.spawn_next();
-                }
-                self.can_hold = false;
-                self.last_action_rotate = false;
-                self.sound_events.push(SoundEvent::Hold);
-            }
-            GameAction::Pause => {
-                self.paused = !self.paused;
-            }
-            GameAction::Restart => {
-                self.reset();
-            }
-        }
-    }
-
-    fn spawn_piece(&mut self, kind: TetrominoType) -> Tetromino {
-        let (spawn_x, spawn_y) = spawn_position();
-        let piece = Tetromino::new(kind, spawn_x, spawn_y);
-        if !self
-            .board
-            .can_place(&piece, piece.x, piece.y, piece.rotation)
-        {
-            self.game_over = true;
-            self.sound_events.push(SoundEvent::GameOver);
-        }
-        piece
+        apply_action(self, action);
     }
 
     pub fn take_sound_events(&mut self) -> Vec<SoundEvent> {
@@ -413,7 +184,19 @@ impl GameState {
 
     pub fn reset(&mut self) {
         let seed = self.rng.next_u32() as u64;
-        let config = GameConfig {
+        *self = GameState::new(seed, self.current_config());
+    }
+
+    pub fn activate_soft_drop(&mut self) {
+        activate_soft_drop(self);
+    }
+
+    pub fn is_soft_drop_active(&self) -> bool {
+        self.soft_drop_active
+    }
+
+    fn current_config(&self) -> GameConfig {
+        GameConfig {
             tick_ms: self.tick_ms,
             soft_drop_multiplier: self.soft_drop_multiplier,
             lock_delay_ms: self.lock_delay_ms,
@@ -421,260 +204,22 @@ impl GameState {
             base_drop_ms: self.base_drop_ms,
             soft_drop_grace_ms: self.soft_drop_grace_ms,
             ruleset: self.ruleset,
-        };
-        *self = GameState::new(seed, config);
-    }
-
-    pub fn activate_soft_drop(&mut self) {
-        self.soft_drop_active = true;
-        self.soft_drop_timeout_ms = self.soft_drop_grace_ms;
-    }
-
-    pub fn is_soft_drop_active(&self) -> bool {
-        self.soft_drop_active
+        }
     }
 
     pub fn ghost_blocks(&self) -> [(i32, i32); 4] {
-        let mut ghost_y = self.active.y;
-        while self
-            .board
-            .can_place(&self.active, self.active.x, ghost_y + 1, self.active.rotation)
-        {
-            ghost_y += 1;
-        }
-
-        let mut blocks = self.active.blocks(self.active.rotation);
-        for (x, y) in blocks.iter_mut() {
-            *x += self.active.x;
-            *y += ghost_y;
-        }
-        blocks
+        ghost_blocks(self)
     }
 
     fn try_move(&mut self, dx: i32, dy: i32) -> bool {
-        let new_x = self.active.x + dx;
-        let new_y = self.active.y + dy;
-        if self
-            .board
-            .can_place(&self.active, new_x, new_y, self.active.rotation)
-        {
-            self.active.x = new_x;
-            self.active.y = new_y;
-            self.handle_lock_reset();
-            return true;
-        }
-        false
-    }
-
-    fn try_rotate(&mut self, clockwise: bool) -> bool {
-        let next_rotation = if clockwise {
-            self.active.rotation.cw()
-        } else {
-            self.active.rotation.ccw()
-        };
-        let kicks = Self::srs_kicks(self.active.kind, self.active.rotation, next_rotation);
-        for (dx, dy) in kicks.iter() {
-            let new_x = self.active.x + dx;
-            let new_y = self.active.y + dy;
-            if self
-                .board
-                .can_place(&self.active, new_x, new_y, next_rotation)
-            {
-                self.active.x = new_x;
-                self.active.y = new_y;
-                self.active.rotation = next_rotation;
-                self.handle_lock_reset();
-                return true;
-            }
-        }
-
-        false
+        try_move(self, dx, dy)
     }
 
     fn can_move_down(&self) -> bool {
-        self.board
-            .can_place(&self.active, self.active.x, self.active.y + 1, self.active.rotation)
-    }
-
-    fn handle_lock_reset(&mut self) {
-        if self.can_move_down() {
-            self.lock_timer_ms = 0;
-            self.lock_reset_count = 0;
-            return;
-        }
-
-        if self.lock_reset_count < self.lock_reset_limit {
-            self.lock_timer_ms = 0;
-            self.lock_reset_count += 1;
-        }
-    }
-
-    fn srs_kicks(
-        kind: TetrominoType,
-        from: Rotation,
-        to: Rotation,
-    ) -> &'static [(i32, i32); 5] {
-        use Rotation::*;
-
-        const JLSTZ_0_R: [(i32, i32); 5] = [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)];
-        const JLSTZ_R_0: [(i32, i32); 5] = [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)];
-        const JLSTZ_R_2: [(i32, i32); 5] = [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)];
-        const JLSTZ_2_R: [(i32, i32); 5] = [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)];
-        const JLSTZ_2_L: [(i32, i32); 5] = [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)];
-        const JLSTZ_L_2: [(i32, i32); 5] = [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)];
-        const JLSTZ_L_0: [(i32, i32); 5] = [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)];
-        const JLSTZ_0_L: [(i32, i32); 5] = [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)];
-
-        const I_0_R: [(i32, i32); 5] = [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)];
-        const I_R_0: [(i32, i32); 5] = [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)];
-        const I_R_2: [(i32, i32); 5] = [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)];
-        const I_2_R: [(i32, i32); 5] = [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)];
-        const I_2_L: [(i32, i32); 5] = [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)];
-        const I_L_2: [(i32, i32); 5] = [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)];
-        const I_L_0: [(i32, i32); 5] = [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)];
-        const I_0_L: [(i32, i32); 5] = [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)];
-        const O_KICKS: [(i32, i32); 5] = [(0, 0), (0, 0), (0, 0), (0, 0), (0, 0)];
-
-        if kind == TetrominoType::O {
-            return &O_KICKS;
-        }
-
-        match (kind, from, to) {
-            (TetrominoType::I, North, East) => &I_0_R,
-            (TetrominoType::I, East, North) => &I_R_0,
-            (TetrominoType::I, East, South) => &I_R_2,
-            (TetrominoType::I, South, East) => &I_2_R,
-            (TetrominoType::I, South, West) => &I_2_L,
-            (TetrominoType::I, West, South) => &I_L_2,
-            (TetrominoType::I, West, North) => &I_L_0,
-            (TetrominoType::I, North, West) => &I_0_L,
-            (_, North, East) => &JLSTZ_0_R,
-            (_, East, North) => &JLSTZ_R_0,
-            (_, East, South) => &JLSTZ_R_2,
-            (_, South, East) => &JLSTZ_2_R,
-            (_, South, West) => &JLSTZ_2_L,
-            (_, West, South) => &JLSTZ_L_2,
-            (_, West, North) => &JLSTZ_L_0,
-            (_, North, West) => &JLSTZ_0_L,
-            _ => &JLSTZ_0_R,
-        }
+        can_move_down(self)
     }
 
     fn lock_active_piece(&mut self) {
-        let t_spin = if self.ruleset == Ruleset::Modern {
-            self.t_spin_kind()
-        } else {
-            TSpinKind::None
-        };
-        self.set_landing_flash();
-        self.board.lock_piece(&self.active);
-        let cleared = self.board.clear_lines();
-        self.apply_line_clear(cleared, t_spin);
-        self.spawn_next();
-        self.last_action_rotate = false;
-    }
-
-    fn set_landing_flash(&mut self) {
-        let blocks = self.active.blocks(self.active.rotation);
-        for (index, (dx, dy)) in blocks.iter().enumerate() {
-            self.last_lock_cells[index] = (self.active.x + dx, self.active.y + dy);
-        }
-        self.landing_flash_timer_ms = 120;
-    }
-
-    fn t_spin_kind(&self) -> TSpinKind {
-        if self.active.kind != TetrominoType::T || !self.last_action_rotate {
-            return TSpinKind::None;
-        }
-
-        let center_x = self.active.x + 1;
-        let center_y = self.active.y + 1;
-        let corners = [
-            (center_x - 1, center_y - 1),
-            (center_x + 1, center_y - 1),
-            (center_x - 1, center_y + 1),
-            (center_x + 1, center_y + 1),
-        ];
-        let mut filled = 0;
-        for (x, y) in corners.iter() {
-            if self.board.is_occupied(*x, *y) {
-                filled += 1;
-            }
-        }
-        if filled < 3 {
-            return TSpinKind::None;
-        }
-
-        let (front_a, front_b) = match self.active.rotation {
-            Rotation::North => ((center_x - 1, center_y - 1), (center_x + 1, center_y - 1)),
-            Rotation::East => ((center_x + 1, center_y - 1), (center_x + 1, center_y + 1)),
-            Rotation::South => ((center_x - 1, center_y + 1), (center_x + 1, center_y + 1)),
-            Rotation::West => ((center_x - 1, center_y - 1), (center_x - 1, center_y + 1)),
-        };
-        let front_filled = self.board.is_occupied(front_a.0, front_a.1) as u8
-            + self.board.is_occupied(front_b.0, front_b.1) as u8;
-
-        if front_filled == 2 {
-            TSpinKind::Full
-        } else {
-            TSpinKind::Mini
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TSpinKind {
-    None,
-    Mini,
-    Full,
-}
-
-#[derive(Clone, Debug)]
-struct SimpleRng {
-    state: u64,
-}
-
-impl SimpleRng {
-    fn new(seed: u64) -> Self {
-        Self { state: seed }
-    }
-
-    fn next_u32(&mut self) -> u32 {
-        // LCG constants from Numerical Recipes.
-        self.state = self.state.wrapping_mul(1664525).wrapping_add(1013904223);
-        (self.state >> 16) as u32
-    }
-
-    fn next_range(&mut self, upper: usize) -> usize {
-        if upper == 0 {
-            return 0;
-        }
-        (self.next_u32() as usize) % upper
-    }
-}
-
-fn refill_bag(rng: &mut SimpleRng, queue: &mut Vec<TetrominoType>) {
-    let mut bag = [
-        TetrominoType::I,
-        TetrominoType::O,
-        TetrominoType::T,
-        TetrominoType::S,
-        TetrominoType::Z,
-        TetrominoType::J,
-        TetrominoType::L,
-    ];
-
-    // Fisher-Yates shuffle.
-    for i in (1..bag.len()).rev() {
-        let j = rng.next_range(i + 1);
-        bag.swap(i, j);
-    }
-
-    queue.extend_from_slice(&bag);
-}
-
-fn ensure_queue(rng: &mut SimpleRng, queue: &mut Vec<TetrominoType>) {
-    while queue.len() < NEXT_QUEUE_SIZE {
-        refill_bag(rng, queue);
+        lock_active_piece(self);
     }
 }
