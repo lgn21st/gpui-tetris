@@ -66,6 +66,7 @@ PRs should include:
 - Soft/hard drops award per-cell points; movement/rotation resets lock timer.
 - DAS/ARR-style repeat movement is handled via key down/up with timers.
 - Next queue is kept at a minimum size for previews.
+- Level speed uses a stepped curve; line clears briefly pause gravity.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

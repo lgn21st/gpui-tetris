@@ -84,3 +84,16 @@ fn soft_drop_expires_after_grace_period() {
     state.tick(100, false);
     assert!(!state.is_soft_drop_active());
 }
+
+#[test]
+fn line_clear_timer_pauses_gravity() {
+    let mut state = GameState::new(6, GameConfig::default());
+    state.line_clear_timer_ms = 200;
+    let start_y = state.active.y;
+
+    state.tick(100, false);
+    assert_eq!(state.active.y, start_y);
+
+    state.tick(200, false);
+    assert!(state.active.y >= start_y);
+}

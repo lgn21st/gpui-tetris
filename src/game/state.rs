@@ -46,6 +46,7 @@ pub struct GameState {
     pub soft_drop_timeout_ms: u64,
     pub drop_timer_ms: u64,
     pub lock_timer_ms: u64,
+    pub line_clear_timer_ms: u64,
     rng: SimpleRng,
 }
 
@@ -80,6 +81,7 @@ impl GameState {
             soft_drop_timeout_ms: 0,
             drop_timer_ms: 0,
             lock_timer_ms: 0,
+            line_clear_timer_ms: 0,
             rng,
         }
     }
@@ -103,6 +105,7 @@ impl GameState {
             return;
         }
 
+        self.line_clear_timer_ms = 200;
         self.lines += cleared as u32;
         let level = self.level + 1;
         let points = match cleared {
@@ -123,11 +126,19 @@ impl GameState {
     }
 
     pub fn drop_interval_ms(&self, soft_drop: bool) -> u64 {
-        let level_factor = self.level as u64 * 50;
-        let mut interval = self.base_drop_ms.saturating_sub(level_factor);
-        if interval < 100 {
-            interval = 100;
-        }
+        let mut interval = match self.level {
+            0 => 1000,
+            1 => 800,
+            2 => 650,
+            3 => 500,
+            4 => 400,
+            5 => 320,
+            6 => 250,
+            7 => 200,
+            8 => 160,
+            _ => 120,
+        };
+        interval = interval.min(self.base_drop_ms).max(100);
         if soft_drop {
             let adjusted = interval / self.soft_drop_multiplier.max(1);
             return adjusted.max(1);
@@ -138,6 +149,13 @@ impl GameState {
     pub fn tick(&mut self, elapsed_ms: u64, soft_drop: bool) {
         if self.game_over || self.paused {
             return;
+        }
+
+        if self.line_clear_timer_ms > 0 {
+            self.line_clear_timer_ms = self.line_clear_timer_ms.saturating_sub(elapsed_ms);
+            if self.line_clear_timer_ms > 0 {
+                return;
+            }
         }
 
         self.drop_timer_ms = self.drop_timer_ms.saturating_add(elapsed_ms);

@@ -40,7 +40,7 @@ fn drop_interval_decreases_with_level_and_has_floor() {
     assert!(faster < base_interval);
 
     state.level = 100;
-    assert_eq!(state.drop_interval_ms(false), 100);
+    assert_eq!(state.drop_interval_ms(false), 120);
 }
 
 #[test]
