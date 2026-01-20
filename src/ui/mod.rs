@@ -185,6 +185,8 @@ impl Render for TetrisView {
                             .border_color(rgb(0x2e2e2e))
                             .relative()
                             .child(div().flex().flex_col().children(rows))
+                            .child(render_line_clear_flash(self.state.line_clear_timer_ms > 0))
+                            .child(render_game_over_tint(self.state.game_over))
                             .child(render_overlay(self.state.paused, self.state.game_over)),
                     )
                     .child(
@@ -441,6 +443,36 @@ fn render_overlay(paused: bool, game_over: bool) -> impl IntoElement {
         .text_color(rgb(0xf5f5f5))
         .child(label)
         .child(div().text_sm().child(hint))
+}
+
+fn render_line_clear_flash(active: bool) -> impl IntoElement {
+    if !active {
+        return div().hidden();
+    }
+
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .bg(rgb(0xffffff))
+        .opacity(0.12)
+}
+
+fn render_game_over_tint(active: bool) -> impl IntoElement {
+    if !active {
+        return div().hidden();
+    }
+
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .bg(rgb(0x3a0f0f))
+        .opacity(0.28)
 }
 fn register_action<A: Action + 'static>(
     cx: &mut App,

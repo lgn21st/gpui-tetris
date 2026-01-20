@@ -67,6 +67,7 @@ PRs should include:
 - DAS/ARR-style repeat movement is handled via key down/up with timers.
 - Next queue is kept at a minimum size for previews.
 - Level speed uses a stepped curve; line clears briefly pause gravity.
+- Line clear flash and game-over tint are rendered in the board overlay.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

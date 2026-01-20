@@ -36,11 +36,10 @@ cargo clippy # lint
 Scores follow classic rules: 1/2/3/4 line clears award 40/100/300/1200 points, multiplied by (level + 1). Level increases every 10 lines. Soft drop awards 1 point per cell, hard drop awards 2 points per cell.
 
 ## Status
-The UI renders the board with active and ghost pieces, inputs (including hold) are wired, auto-drop ticking runs each frame, and pause/game-over overlays plus next/hold previews are shown. Soft drop acceleration is input-driven with a short grace window, and left/right movement uses DAS/ARR repeat logic. Level speed now follows a stepped curve and line clears briefly pause gravity for animation timing.
+The UI renders the board with active and ghost pieces, inputs (including hold) are wired, auto-drop ticking runs each frame, and pause/game-over overlays plus next/hold previews are shown. Soft drop acceleration is input-driven with a short grace window, and left/right movement uses DAS/ARR repeat logic. Level speed follows a stepped curve and line clears briefly pause gravity with a flash effect; game over adds a red tint overlay.
 
 ## Roadmap
 - Tune lock delay feel and line-clear animation duration.
-- Add line-clear and game-over visual effects.
 - Consider audio polish once core rules stabilize.
 
 ## Dependency Notes (TODO)

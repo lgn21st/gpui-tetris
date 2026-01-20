@@ -17,6 +17,13 @@ fn soft_drop_awards_point_per_cell() {
 }
 
 #[test]
+fn line_clear_sets_timer() {
+    let mut state = GameState::new(6, GameConfig::default());
+    state.apply_line_clear(1);
+    assert!(state.line_clear_timer_ms > 0);
+}
+
+#[test]
 fn hard_drop_awards_two_points_per_cell() {
     let mut state = GameState::new(2, GameConfig::default());
     state.active = Tetromino::new(TetrominoType::O, 3, 0);
