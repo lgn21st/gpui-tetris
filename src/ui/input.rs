@@ -29,6 +29,7 @@ pub struct InputState {
     controller_left_held: bool,
     controller_right_held: bool,
     controller_down_held: bool,
+    temp_actions: Vec<InputAction>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -82,6 +83,7 @@ impl InputState {
             controller_left_held: false,
             controller_right_held: false,
             controller_down_held: false,
+            temp_actions: Vec::with_capacity(4),
         }
     }
 
@@ -190,27 +192,39 @@ impl InputState {
     }
 
     fn handle_controller_button(&mut self, button: Button, pressed: bool) -> Vec<InputAction> {
-        let mut actions = Vec::new();
+        self.temp_actions.clear();
         match button {
             Button::DPadLeft => self.controller_left_button = pressed,
             Button::DPadRight => self.controller_right_button = pressed,
             Button::DPadDown => self.controller_down_button = pressed,
-            Button::South if pressed => actions.push(InputAction::silent(GameAction::RotateCw)),
-            Button::East if pressed => actions.push(InputAction::silent(GameAction::RotateCcw)),
-            Button::West if pressed => actions.push(InputAction::silent(GameAction::Hold)),
-            Button::North if pressed => actions.push(InputAction::silent(GameAction::HardDrop)),
-            Button::Start if pressed => actions.push(InputAction::silent(GameAction::Pause)),
-            Button::Select | Button::Mode if pressed => {
-                actions.push(InputAction::silent(GameAction::Restart))
-            }
+            Button::South if pressed => self
+                .temp_actions
+                .push(InputAction::silent(GameAction::RotateCw)),
+            Button::East if pressed => self
+                .temp_actions
+                .push(InputAction::silent(GameAction::RotateCcw)),
+            Button::West if pressed => self
+                .temp_actions
+                .push(InputAction::silent(GameAction::Hold)),
+            Button::North if pressed => self
+                .temp_actions
+                .push(InputAction::silent(GameAction::HardDrop)),
+            Button::Start if pressed => self
+                .temp_actions
+                .push(InputAction::silent(GameAction::Pause)),
+            Button::Select | Button::Mode if pressed => self
+                .temp_actions
+                .push(InputAction::silent(GameAction::Restart)),
             _ => {}
         }
 
-        actions.extend(self.sync_controller_holds());
-        actions
+        let holds = self.sync_controller_holds();
+        self.temp_actions.extend(holds);
+        std::mem::take(&mut self.temp_actions)
     }
 
     fn handle_controller_axis(&mut self, axis: Axis, value: f32) -> Vec<InputAction> {
+        self.temp_actions.clear();
         match axis {
             Axis::LeftStickX => {
                 self.controller_left_axis = value < -CONTROLLER_AXIS_THRESHOLD;
@@ -222,7 +236,9 @@ impl InputState {
             _ => {}
         }
 
-        self.sync_controller_holds()
+        let holds = self.sync_controller_holds();
+        self.temp_actions.extend(holds);
+        std::mem::take(&mut self.temp_actions)
     }
 
     fn sync_movement_holds(&mut self) -> Vec<InputAction> {
