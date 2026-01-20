@@ -69,7 +69,7 @@ PRs should include:
 - Level speed uses a stepped curve; line clears briefly pause gravity.
 - Line clear flash and game-over tint are rendered in the board overlay.
 - Default lock delay is 450ms; line clear pause is 180ms.
-- Audio hooks emit sound events for moves, drops, line clears, holds, and game over.
+- Sound events are emitted for moves, drops, line clears, holds, and game over and played if WAVs are present under `assets/sfx/`.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

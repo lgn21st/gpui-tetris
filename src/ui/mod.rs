@@ -4,9 +4,11 @@ use gpui::{
     Window, WindowBounds, WindowOptions, prelude::*,
 };
 
+use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::{GameAction, RepeatConfig, RepeatState};
 use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
+use std::path::Path;
 use std::time::Instant;
 
 pub const WINDOW_WIDTH: f32 = 480.0;
@@ -42,6 +44,13 @@ pub fn run() {
             is_resizable: false,
             ..Default::default()
         };
+        let audio_engine = match AudioEngine::new(Path::new("assets/sfx")) {
+            Ok(engine) => Some(engine),
+            Err(err) => {
+                eprintln!("audio disabled: {err}");
+                None
+            }
+        };
 
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
@@ -63,7 +72,10 @@ pub fn run() {
         }]);
 
         let window = cx
-            .open_window(options, |_, cx| cx.new(|cx| TetrisView::new(cx)))
+            .open_window(options, move |_, cx| {
+                let audio = audio_engine.clone();
+                cx.new(|cx| TetrisView::new(cx, audio))
+            })
             .unwrap();
         let view = window.update(cx, |_, _, cx| cx.entity()).unwrap();
 
@@ -98,10 +110,11 @@ struct TetrisView {
     left_repeat: RepeatState,
     right_repeat: RepeatState,
     last_dir: Option<Direction>,
+    audio: Option<AudioEngine>,
 }
 
 impl TetrisView {
-    fn new(cx: &mut Context<Self>) -> Self {
+    fn new(cx: &mut Context<Self>, audio: Option<AudioEngine>) -> Self {
         let board_width = CELL_SIZE * BOARD_COLS;
         let board_height = CELL_SIZE * BOARD_ROWS;
         let panel_width = WINDOW_WIDTH - board_width - (PADDING * 2.0) - GAP;
@@ -120,6 +133,7 @@ impl TetrisView {
             left_repeat: RepeatState::new(),
             right_repeat: RepeatState::new(),
             last_dir: None,
+            audio,
         }
     }
 }
@@ -136,6 +150,7 @@ impl Render for TetrisView {
         }
         self.last_tick = Some(now);
         window.request_animation_frame();
+        self.play_sound_events();
 
         let active_blocks = self.state.active.blocks(self.state.active.rotation);
         let mut active_cells = Vec::with_capacity(4);
@@ -411,6 +426,15 @@ impl TetrisView {
                 }
             }
             None => {}
+        }
+    }
+
+    fn play_sound_events(&mut self) {
+        let events = self.state.take_sound_events();
+        if let Some(audio) = &self.audio {
+            for event in events {
+                audio.play(event);
+            }
         }
     }
 }

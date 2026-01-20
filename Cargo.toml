@@ -6,6 +6,10 @@ edition = "2021"
 [dependencies]
 # gpui crate version may change; update as needed for your local setup.
 gpui = "0.2.2"
+cpal = "0.15"
+crossbeam-channel = "0.5"
+hound = "3.5"
+anyhow = "1.0"
 
 [patch.crates-io]
 zed-font-kit = { path = "vendor/zed-font-kit" }
