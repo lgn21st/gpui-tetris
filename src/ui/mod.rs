@@ -8,6 +8,7 @@ use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::{GameAction, RepeatConfig, RepeatState};
 use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
+use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -123,9 +124,20 @@ pub fn run() {
 }
 
 fn resolve_sfx_dir(cx: &App) -> PathBuf {
-    if let Ok(app_path) = cx.app_path() {
-        return app_path.join("Contents/Resources/assets/sfx");
+    if let Ok(dir) = env::var("TETRIS_ASSET_DIR") {
+        let path = PathBuf::from(dir);
+        if path.exists() {
+            return path;
+        }
     }
+
+    if let Ok(app_path) = cx.app_path() {
+        let bundled = app_path.join("Contents/Resources/assets/sfx");
+        if bundled.exists() {
+            return bundled;
+        }
+    }
+
     Path::new("assets/sfx").to_path_buf()
 }
 
