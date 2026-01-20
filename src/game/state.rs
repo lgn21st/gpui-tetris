@@ -18,7 +18,7 @@ impl Default for GameConfig {
         Self {
             tick_ms: 16,
             soft_drop_multiplier: 10,
-            lock_delay_ms: 500,
+            lock_delay_ms: 450,
             base_drop_ms: 1000,
             soft_drop_grace_ms: 150,
         }
@@ -105,7 +105,7 @@ impl GameState {
             return;
         }
 
-        self.line_clear_timer_ms = 200;
+        self.line_clear_timer_ms = 180;
         self.lines += cleared as u32;
         let level = self.level + 1;
         let points = match cleared {

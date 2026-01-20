@@ -68,6 +68,7 @@ PRs should include:
 - Next queue is kept at a minimum size for previews.
 - Level speed uses a stepped curve; line clears briefly pause gravity.
 - Line clear flash and game-over tint are rendered in the board overlay.
+- Default lock delay is 450ms; line clear pause is 180ms.
 - Tests cover rules, tick, actions, hold, pause/restart, and rotation kicks.
 
 ## Agent-Specific Instructions

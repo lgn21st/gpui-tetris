@@ -41,18 +41,18 @@ fn tick_uses_soft_drop_interval() {
 fn tick_locks_piece_after_lock_delay() {
     let config = GameConfig {
         base_drop_ms: 1000,
-        lock_delay_ms: 500,
+        lock_delay_ms: 450,
         ..GameConfig::default()
     };
     let mut state = GameState::new(3, config);
     state.active = Tetromino::new(TetrominoType::O, 3, BOARD_HEIGHT as i32 - 2);
     state.active.rotation = Rotation::North;
 
-    state.tick(400, false);
+    state.tick(350, false);
     assert!(!state.game_over);
-    assert_eq!(state.lock_timer_ms, 400);
+    assert_eq!(state.lock_timer_ms, 350);
 
-    state.tick(200, false);
+    state.tick(150, false);
     assert_eq!(state.lock_timer_ms, 0);
     assert!(state.board.cells[BOARD_HEIGHT - 1][4].filled);
 }
@@ -88,12 +88,12 @@ fn soft_drop_expires_after_grace_period() {
 #[test]
 fn line_clear_timer_pauses_gravity() {
     let mut state = GameState::new(6, GameConfig::default());
-    state.line_clear_timer_ms = 200;
+    state.line_clear_timer_ms = 180;
     let start_y = state.active.y;
 
-    state.tick(100, false);
+    state.tick(90, false);
     assert_eq!(state.active.y, start_y);
 
-    state.tick(200, false);
+    state.tick(180, false);
     assert!(state.active.y >= start_y);
 }
