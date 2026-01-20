@@ -128,11 +128,14 @@ fn build_output_stream(
                 let assets = assets.clone();
                 let voices = voices.clone();
                 let master_gain = master_gain.clone();
+                let mut scratch: Vec<f32> = Vec::new();
                 move |data: &mut [i16], _| {
-                    let mut buffer = vec![0.0f32; data.len()];
+                    if scratch.len() != data.len() {
+                        scratch.resize(data.len(), 0.0);
+                    }
                     let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                    render_audio(&mut buffer, channels, sample_rate, &rx, &assets, &voices, gain);
-                    for (dst, sample) in data.iter_mut().zip(buffer.iter()) {
+                    render_audio(&mut scratch, channels, sample_rate, &rx, &assets, &voices, gain);
+                    for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
                         *dst = <i16 as cpal::Sample>::from_sample(*sample);
                     }
                 }
@@ -148,11 +151,14 @@ fn build_output_stream(
                 let assets = assets.clone();
                 let voices = voices.clone();
                 let master_gain = master_gain.clone();
+                let mut scratch: Vec<f32> = Vec::new();
                 move |data: &mut [u16], _| {
-                    let mut buffer = vec![0.0f32; data.len()];
+                    if scratch.len() != data.len() {
+                        scratch.resize(data.len(), 0.0);
+                    }
                     let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                    render_audio(&mut buffer, channels, sample_rate, &rx, &assets, &voices, gain);
-                    for (dst, sample) in data.iter_mut().zip(buffer.iter()) {
+                    render_audio(&mut scratch, channels, sample_rate, &rx, &assets, &voices, gain);
+                    for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
                         *dst = <u16 as cpal::Sample>::from_sample(*sample);
                     }
                 }
@@ -222,12 +228,16 @@ fn render_audio(
         *sample = 0.0;
     }
 
-    let mut dead = Vec::new();
+    let mut dead = [0usize; MAX_VOICES];
+    let mut dead_len = 0usize;
     if let Ok(mut guard) = voices.lock() {
         for (index, voice) in guard.iter_mut().enumerate() {
             for frame in output.chunks_mut(channels) {
                 if voice.position as usize >= voice.samples.len() / voice.channels as usize {
-                    dead.push(index);
+                    if dead_len < dead.len() {
+                        dead[dead_len] = index;
+                        dead_len += 1;
+                    }
                     break;
                 }
 
@@ -251,7 +261,8 @@ fn render_audio(
             }
         }
 
-        for &index in dead.iter().rev() {
+        for slot in (0..dead_len).rev() {
+            let index = dead[slot];
             guard.swap_remove(index);
         }
     }

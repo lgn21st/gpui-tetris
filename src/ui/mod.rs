@@ -250,7 +250,7 @@ impl Render for TetrisView {
         self.play_sound_events();
 
         let show_active = !self.state.is_line_clear_active();
-        let mut active_cells = Vec::new();
+        let mut active_cells = Vec::with_capacity(4);
         let landing_cells = if self.state.landing_flash_active() {
             self.state.last_lock_cells
         } else {
@@ -267,7 +267,7 @@ impl Render for TetrisView {
             [(0, 0); 4]
         };
 
-        let mut rows = Vec::new();
+        let mut rows = Vec::with_capacity(BOARD_ROWS as usize);
         for y in 0..BOARD_ROWS as i32 {
             let mut row = div().flex();
             for x in 0..BOARD_COLS as i32 {
@@ -623,16 +623,14 @@ impl TetrisView {
     }
 
     fn poll_controller(&mut self) {
-        let events = {
-            let Some(gilrs) = self.gilrs.as_mut() else {
-                return;
-            };
-            let mut events = Vec::new();
-            while let Some(event) = gilrs.next_event() {
-                events.push(event);
-            }
-            events
+        let Some(mut gilrs) = self.gilrs.take() else {
+            return;
         };
+        let mut events = Vec::new();
+        while let Some(event) = gilrs.next_event() {
+            events.push(event);
+        }
+        self.gilrs = Some(gilrs);
 
         for event in events {
             if self.gamepad_id.is_none() {
