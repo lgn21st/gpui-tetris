@@ -103,40 +103,19 @@ fn build_output_stream(
     let channels = config.channels() as usize;
     let sample_rate = config.sample_rate();
 
-    let assets = Arc::new(assets);
-    let voices = Arc::new(Mutex::new(Vec::<Voice>::new()));
+    let params = StreamParams {
+        channels,
+        sample_rate,
+        rx,
+        assets: Arc::new(assets),
+        voices: Arc::new(Mutex::new(Vec::<Voice>::new())),
+        master_gain,
+    };
 
     let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => build_output_stream_f32(
-            &device,
-            &config,
-            channels,
-            sample_rate,
-            rx,
-            &assets,
-            &voices,
-            &master_gain,
-        )?,
-        cpal::SampleFormat::I16 => build_output_stream_i16(
-            &device,
-            &config,
-            channels,
-            sample_rate,
-            rx,
-            &assets,
-            &voices,
-            &master_gain,
-        )?,
-        cpal::SampleFormat::U16 => build_output_stream_u16(
-            &device,
-            &config,
-            channels,
-            sample_rate,
-            rx,
-            &assets,
-            &voices,
-            &master_gain,
-        )?,
+        cpal::SampleFormat::F32 => build_output_stream_f32(&device, &config, params)?,
+        cpal::SampleFormat::I16 => build_output_stream_i16(&device, &config, params)?,
+        cpal::SampleFormat::U16 => build_output_stream_u16(&device, &config, params)?,
         _ => {
             return Err(anyhow::anyhow!(
                 "unsupported sample format: {:?}",
@@ -148,19 +127,28 @@ fn build_output_stream(
     Ok(stream)
 }
 
-fn build_output_stream_f32(
-    device: &cpal::Device,
-    config: &cpal::SupportedStreamConfig,
+struct StreamParams {
     channels: usize,
     sample_rate: u32,
     rx: Receiver<SoundEvent>,
-    assets: &Arc<HashMap<&'static str, SoundAsset>>,
-    voices: &Arc<Mutex<Vec<Voice>>>,
-    master_gain: &Arc<AtomicU32>,
+    assets: Arc<HashMap<&'static str, SoundAsset>>,
+    voices: Arc<Mutex<Vec<Voice>>>,
+    master_gain: Arc<AtomicU32>,
+}
+
+fn build_output_stream_f32(
+    device: &cpal::Device,
+    config: &cpal::SupportedStreamConfig,
+    params: StreamParams,
 ) -> anyhow::Result<cpal::Stream> {
-    let assets = assets.clone();
-    let voices = voices.clone();
-    let master_gain = master_gain.clone();
+    let StreamParams {
+        channels,
+        sample_rate,
+        rx,
+        assets,
+        voices,
+        master_gain,
+    } = params;
     device
         .build_output_stream(
             &config.clone().into(),
@@ -179,16 +167,16 @@ fn build_output_stream_f32(
 fn build_output_stream_i16(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
-    channels: usize,
-    sample_rate: u32,
-    rx: Receiver<SoundEvent>,
-    assets: &Arc<HashMap<&'static str, SoundAsset>>,
-    voices: &Arc<Mutex<Vec<Voice>>>,
-    master_gain: &Arc<AtomicU32>,
+    params: StreamParams,
 ) -> anyhow::Result<cpal::Stream> {
-    let assets = assets.clone();
-    let voices = voices.clone();
-    let master_gain = master_gain.clone();
+    let StreamParams {
+        channels,
+        sample_rate,
+        rx,
+        assets,
+        voices,
+        master_gain,
+    } = params;
     let mut scratch: Vec<f32> = Vec::new();
     device
         .build_output_stream(
@@ -222,16 +210,16 @@ fn build_output_stream_i16(
 fn build_output_stream_u16(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
-    channels: usize,
-    sample_rate: u32,
-    rx: Receiver<SoundEvent>,
-    assets: &Arc<HashMap<&'static str, SoundAsset>>,
-    voices: &Arc<Mutex<Vec<Voice>>>,
-    master_gain: &Arc<AtomicU32>,
+    params: StreamParams,
 ) -> anyhow::Result<cpal::Stream> {
-    let assets = assets.clone();
-    let voices = voices.clone();
-    let master_gain = master_gain.clone();
+    let StreamParams {
+        channels,
+        sample_rate,
+        rx,
+        assets,
+        voices,
+        master_gain,
+    } = params;
     let mut scratch: Vec<f32> = Vec::new();
     device
         .build_output_stream(
@@ -263,10 +251,10 @@ fn build_output_stream_u16(
 }
 
 fn select_output_config(device: &cpal::Device) -> anyhow::Result<cpal::SupportedStreamConfig> {
-    let mut candidates = device.supported_output_configs()?;
+    let candidates = device.supported_output_configs()?;
     let mut selected = None;
 
-    while let Some(config) = candidates.next() {
+    for config in candidates {
         if config.channels() == 2 {
             let min = config.min_sample_rate();
             let max = config.max_sample_rate();
@@ -290,19 +278,19 @@ fn render_audio(
     master_gain: f32,
 ) {
     for event in rx.try_iter() {
-        if let Some(asset_key) = sound_event_to_asset(&event) {
-            if let Some(asset) = assets.get(asset_key) {
-                let step = asset.sample_rate as f32 / device_rate as f32;
-                let voice = Voice {
-                    samples: asset.samples.clone(),
-                    channels: asset.channels,
-                    position: 0.0,
-                    step,
-                    gain: sound_event_gain(&event),
-                };
-                if let Ok(mut guard) = voices.lock() {
-                    push_voice(&mut guard, voice);
-                }
+        if let Some(asset_key) = sound_event_to_asset(&event)
+            && let Some(asset) = assets.get(asset_key)
+        {
+            let step = asset.sample_rate as f32 / device_rate as f32;
+            let voice = Voice {
+                samples: asset.samples.clone(),
+                channels: asset.channels,
+                position: 0.0,
+                step,
+                gain: sound_event_gain(&event),
+            };
+            if let Ok(mut guard) = voices.lock() {
+                push_voice(&mut guard, voice);
             }
         }
     }

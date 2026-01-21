@@ -2,7 +2,7 @@ use gpui::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::render::{
-    render_cell, render_game_over_tint, render_line_clear_flash, render_lock_bar,
+    OverlayState, render_cell, render_game_over_tint, render_line_clear_flash, render_lock_bar,
     render_lock_warning, render_overlay, render_preview,
 };
 use crate::ui::style::{
@@ -111,16 +111,16 @@ pub fn render_board(
         .child(render_line_clear_flash(ui.state.line_clear_timer_ms > 0))
         .child(render_lock_warning(ui.state.lock_warning_intensity()))
         .child(render_game_over_tint(ui.state.game_over))
-        .child(render_overlay(
-            ui.started,
-            ui.show_settings,
-            ui.state.paused,
-            ui.state.game_over,
+        .child(render_overlay(&OverlayState {
+            started: ui.started,
+            show_settings: ui.show_settings,
+            paused: ui.state.paused,
+            game_over: ui.state.game_over,
             focused,
-            ui.sfx_volume_label(),
-            ui.sfx_muted,
-            layout.scale,
-        ))
+            sfx_label: ui.sfx_volume_label(),
+            muted: ui.sfx_muted,
+            scale: layout.scale,
+        }))
 }
 
 pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement + use<> {

@@ -81,14 +81,12 @@ pub fn run() {
                 cx.new(|cx| TetrisView::new(cx, audio))
             })
             .unwrap();
-        let window_handle = window.clone();
+        let window_handle = window;
 
         cx.on_action({
-            let window = window_handle.clone();
+            let window = window_handle;
             move |_: &ToggleFullscreen, cx| {
-                let target = cx
-                    .active_window()
-                    .unwrap_or_else(|| window.clone().into());
+                let target = cx.active_window().unwrap_or_else(|| window.into());
                 cx.defer(move |cx| {
                     let _ = target.update(cx, |_, window, _| {
                         window.activate_window();

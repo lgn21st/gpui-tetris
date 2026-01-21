@@ -33,11 +33,11 @@ pub fn render_preview(
     const PREVIEW_SIZE: usize = 4;
     let filled = ui.preview_mask(kind);
 
-    let mut rows = Vec::with_capacity(PREVIEW_SIZE as usize);
-    for y in 0..PREVIEW_SIZE {
+    let mut rows = Vec::with_capacity(PREVIEW_SIZE);
+    for row_filled in filled.iter().take(PREVIEW_SIZE) {
         let mut row = div().flex();
-        for x in 0..PREVIEW_SIZE {
-            let cell_kind = if filled[y][x] { kind } else { None };
+        for &cell_filled in row_filled.iter().take(PREVIEW_SIZE) {
+            let cell_kind = if cell_filled { kind } else { None };
             row = row.child(render_preview_cell(cell_kind, cell_size));
         }
         rows.push(row);

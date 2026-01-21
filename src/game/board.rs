@@ -3,24 +3,21 @@ use crate::game::pieces::{Rotation, Tetromino};
 pub const BOARD_WIDTH: usize = 10;
 pub const BOARD_HEIGHT: usize = 20;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Cell {
     pub filled: bool,
     pub kind: Option<crate::game::pieces::TetrominoType>,
 }
 
-impl Default for Cell {
-    fn default() -> Self {
-        Self {
-            filled: false,
-            kind: None,
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Board {
     pub cells: [[Cell; BOARD_WIDTH]; BOARD_HEIGHT],
+}
+
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Board {

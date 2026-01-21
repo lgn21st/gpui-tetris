@@ -174,7 +174,7 @@ impl GameState {
         if !self.lock_warning_active() {
             return 0.0;
         }
-        if (self.lock_timer_ms / 120) % 2 == 0 {
+        if (self.lock_timer_ms / 120).is_multiple_of(2) {
             0.12
         } else {
             0.22

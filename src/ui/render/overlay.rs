@@ -7,19 +7,10 @@ use crate::ui::ui_state::{
     TITLE_SETTINGS,
 };
 
-pub fn render_overlay(
-    started: bool,
-    show_settings: bool,
-    paused: bool,
-    game_over: bool,
-    focused: bool,
-    sfx_label: String,
-    muted: bool,
-    scale: f32,
-) -> impl IntoElement {
-    let title_size = (BASE_TITLE_TEXT * scale).max(16.0);
-    let hint_size = (BASE_HINT_TEXT * scale).max(10.0);
-    if show_settings {
+pub fn render_overlay(state: &OverlayState) -> impl IntoElement {
+    let title_size = (BASE_TITLE_TEXT * state.scale).max(16.0);
+    let hint_size = (BASE_HINT_TEXT * state.scale).max(10.0);
+    if state.show_settings {
         return div()
             .absolute()
             .top_0()
@@ -38,14 +29,14 @@ pub fn render_overlay(
             .child("Settings")
             .child(div().text_size(px(hint_size)).child(format!(
                 "SFX Volume: {}{}",
-                sfx_label,
-                if muted { " (M)" } else { "" }
+                state.sfx_label,
+                if state.muted { " (M)" } else { "" }
             )))
             .child(div().text_size(px(hint_size)).child(SETTINGS_SHORTCUTS))
             .child(div().text_size(px(hint_size)).child(SETTINGS_BACK));
     }
 
-    if !started {
+    if !state.started {
         return div()
             .absolute()
             .top_0()
@@ -66,8 +57,8 @@ pub fn render_overlay(
             .child(div().text_size(px(hint_size)).child(TITLE_SETTINGS));
     }
 
-    if !paused && !game_over {
-        if focused {
+    if !state.paused && !state.game_over {
+        if state.focused {
             return div().hidden();
         }
         return div()
@@ -88,8 +79,12 @@ pub fn render_overlay(
             .child(FOCUS_HINT);
     }
 
-    let label = if game_over { "Game Over" } else { "Paused" };
-    let hint = if game_over {
+    let label = if state.game_over {
+        "Game Over"
+    } else {
+        "Paused"
+    };
+    let hint = if state.game_over {
         GAME_OVER_HINT
     } else {
         PAUSED_HINT
@@ -112,4 +107,15 @@ pub fn render_overlay(
         .text_size(px(title_size))
         .child(label)
         .child(div().text_size(px(hint_size)).child(hint))
+}
+
+pub struct OverlayState {
+    pub started: bool,
+    pub show_settings: bool,
+    pub paused: bool,
+    pub game_over: bool,
+    pub focused: bool,
+    pub sfx_label: String,
+    pub muted: bool,
+    pub scale: f32,
 }

@@ -107,9 +107,11 @@ impl UiState {
             ghost_mask: [false; BOARD_CELLS],
             panel_labels: PanelLabels::default(),
             labels_dirty: {
-                let mut dirty = LabelDirty::default();
-                dirty.input = true;
-                dirty.sfx = true;
+                let mut dirty = LabelDirty {
+                    input: true,
+                    sfx: true,
+                    ..Default::default()
+                };
                 dirty.mark_game_dirty();
                 dirty
             },

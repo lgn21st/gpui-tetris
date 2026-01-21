@@ -26,15 +26,14 @@ impl TetrisView {
     pub fn new(cx: &mut Context<Self>, audio: Option<AudioEngine>) -> Self {
         let state = GameState::new(1, GameConfig::default());
         let focus_handle = cx.focus_handle();
-        let view = Self {
+        Self {
             ui: UiState::new(state, audio),
             last_tick: None,
             focus_handle,
             input: InputState::new(),
             was_focused: true,
             input_actions: Vec::with_capacity(16),
-        };
-        view
+        }
     }
 
     pub fn focus_handle(&self) -> &FocusHandle {

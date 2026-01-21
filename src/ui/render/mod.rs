@@ -10,5 +10,5 @@ pub use board::{
 };
 pub use layout::RenderLayout;
 pub use layout::{render_board, render_panel};
-pub use overlay::render_overlay;
+pub use overlay::{OverlayState, render_overlay};
 pub use panel::render_lock_bar;
