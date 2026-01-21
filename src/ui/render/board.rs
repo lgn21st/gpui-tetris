@@ -25,6 +25,43 @@ pub fn render_cell(
         .border_color(border)
 }
 
+pub fn render_active_piece(
+    kind: TetrominoType,
+    blocks: &[(i32, i32); 4],
+    offset_x: f32,
+    offset_y: f32,
+    cell_size: f32,
+    opacity: f32,
+) -> impl IntoElement {
+    let fill = theme::piece_fill(Some(kind), false);
+    let border = theme::ghost_fill();
+    let mut layer = div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .opacity(opacity);
+
+    for (dx, dy) in blocks.iter() {
+        let left = offset_x + (*dx as f32 * cell_size);
+        let top = offset_y + (*dy as f32 * cell_size);
+        layer = layer.child(
+            div()
+                .absolute()
+                .left(px(left))
+                .top(px(top))
+                .w(px(cell_size))
+                .h(px(cell_size))
+                .bg(fill)
+                .border(px(1.0))
+                .border_color(border),
+        );
+    }
+
+    layer
+}
+
 pub fn render_preview(
     ui: &mut UiState,
     kind: Option<TetrominoType>,

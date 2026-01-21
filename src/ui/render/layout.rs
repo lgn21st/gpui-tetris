@@ -2,8 +2,9 @@ use gpui::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::render::{
-    OverlayState, render_cell, render_game_over_tint, render_line_clear_flash, render_lock_bar,
-    render_lock_warning, render_overlay, render_preview,
+    OverlayState, render_active_piece, render_cell, render_game_over_tint,
+    render_line_clear_flash, render_lock_bar, render_lock_warning, render_overlay,
+    render_preview,
 };
 use crate::ui::style::{
     BASE_CELL_SIZE, BASE_GAP, BASE_PADDING, BASE_PANEL_TEXT, BASE_WINDOW_WIDTH, BOARD_COLS,
@@ -45,6 +46,7 @@ pub fn render_board(
     ui: &mut UiState,
     layout: &RenderLayout,
     focused: bool,
+    now: std::time::Instant,
 ) -> impl IntoElement + use<> {
     ui.sync_board_cache();
     let show_active = !ui.state.is_line_clear_active();
@@ -66,13 +68,6 @@ pub fn render_board(
     }
 
     if show_active {
-        for (dx, dy) in ui.state.active.blocks(ui.state.active.rotation).iter() {
-            set_mask(
-                &mut ui.active_mask,
-                ui.state.active.x + dx,
-                ui.state.active.y + dy,
-            );
-        }
         for (x, y) in ui.state.ghost_blocks().iter() {
             set_mask(&mut ui.ghost_mask, *x, *y);
         }
@@ -88,9 +83,7 @@ pub fn render_board(
             let mut is_ghost = false;
             let is_flash = ui.flash_mask[idx];
 
-            if show_active && ui.active_mask[idx] {
-                cell_kind = Some(ui.state.active.kind);
-            } else if show_active && ui.ghost_mask[idx] {
+            if show_active && ui.ghost_mask[idx] {
                 cell_kind = Some(ui.state.active.kind);
                 is_ghost = true;
             }
@@ -108,8 +101,13 @@ pub fn render_board(
         .border_color(theme::border())
         .relative()
         .child(div().flex().flex_col().children(rows))
+        .child(render_active_overlay(ui, layout, show_active, now))
         .child(render_line_clear_flash(ui.state.line_clear_timer_ms > 0))
-        .child(render_lock_warning(ui.state.lock_warning_intensity()))
+        .child(render_lock_warning(if ui.state.is_grounded() {
+            0.0
+        } else {
+            ui.state.lock_warning_intensity()
+        }))
         .child(render_game_over_tint(ui.state.game_over))
         .child(render_overlay(&OverlayState {
             started: ui.started,
@@ -121,6 +119,70 @@ pub fn render_board(
             muted: ui.sfx_muted,
             scale: layout.scale,
         }))
+}
+
+fn render_active_overlay(
+    ui: &UiState,
+    layout: &RenderLayout,
+    show_active: bool,
+    now: std::time::Instant,
+) -> impl IntoElement + use<> {
+    if !show_active {
+        return div().hidden();
+    }
+
+    let active = ui.active_snapshot();
+    let cell_size = layout.cell_size;
+    let mut layer = div().absolute().top_0().left_0().right_0().bottom_0();
+
+    if let Some(anim) = ui.active_animation_state(now) {
+        let progress = anim.progress;
+        let dx = (anim.from_x - anim.to_x) as f32;
+        let dy = (anim.from_y - anim.to_y) as f32;
+        let offset_x = ((anim.to_x as f32) + dx * (1.0 - progress)) * cell_size;
+        let offset_y = ((anim.to_y as f32) + dy * (1.0 - progress)) * cell_size;
+
+        let to_piece = gpui_tetris::game::pieces::Tetromino::new(anim.kind, 0, 0);
+        let to_blocks = to_piece.blocks(anim.to_rotation);
+        layer = layer.child(render_active_piece(
+            anim.kind,
+            &to_blocks,
+            offset_x,
+            offset_y,
+            cell_size,
+            1.0,
+        ));
+
+        if anim.rotation_changed && anim.from_rotation != anim.to_rotation {
+            let from_piece = gpui_tetris::game::pieces::Tetromino::new(anim.kind, 0, 0);
+            let from_blocks = from_piece.blocks(anim.from_rotation);
+            let from_offset_x = anim.from_x as f32 * cell_size;
+            let from_offset_y = anim.from_y as f32 * cell_size;
+            layer = layer.child(render_active_piece(
+                anim.kind,
+                &from_blocks,
+                from_offset_x,
+                from_offset_y,
+                cell_size,
+                (1.0 - progress).clamp(0.0, 1.0),
+            ));
+        }
+    } else {
+        let piece = gpui_tetris::game::pieces::Tetromino::new(active.kind, 0, 0);
+        let blocks = piece.blocks(active.rotation);
+        let offset_x = active.x as f32 * cell_size;
+        let offset_y = active.y as f32 * cell_size;
+        layer = layer.child(render_active_piece(
+            active.kind,
+            &blocks,
+            offset_x,
+            offset_y,
+            cell_size,
+            1.0,
+        ));
+    }
+
+    layer
 }
 
 pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement + use<> {

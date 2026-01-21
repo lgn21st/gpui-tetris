@@ -57,7 +57,7 @@ impl Render for TetrisView {
         self.play_sound_events();
         self.ui.sync_panel_labels();
 
-        let board = render_board(&mut self.ui, &layout, focused);
+        let board = render_board(&mut self.ui, &layout, focused, now);
         let panel = render_panel(&mut self.ui, &layout);
 
         div()
@@ -110,6 +110,7 @@ impl TetrisView {
                 self.apply_buffered_actions();
             }
         }
+        self.ui.update_active_animation(now);
         self.last_tick = Some(now);
     }
 }

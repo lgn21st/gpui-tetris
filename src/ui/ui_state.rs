@@ -1,7 +1,8 @@
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
+use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
 use gpui_tetris::game::state::GameState;
+use std::time::Instant;
 
 use crate::ui::style::{BOARD_COLS_USIZE, BOARD_ROWS_USIZE, DEFAULT_SFX_VOLUME};
 
@@ -23,6 +24,8 @@ pub struct UiState {
     pub(crate) preview_cache: PreviewCache,
     pub(crate) board_cache: [Option<TetrominoType>; BOARD_CELLS],
     board_revision: u64,
+    active_snapshot: Option<ActiveSnapshot>,
+    active_anim: Option<ActiveAnimation>,
 }
 
 #[derive(Default)]
@@ -118,9 +121,12 @@ impl UiState {
             preview_cache: PreviewCache::new(),
             board_cache: [None; BOARD_CELLS],
             board_revision: 0,
+            active_snapshot: None,
+            active_anim: None,
         };
         ui.apply_audio_volume();
         ui.sync_panel_labels();
+        ui.active_snapshot = Some(ui.snapshot_active());
         ui
     }
 
@@ -156,6 +162,8 @@ impl UiState {
         self.state.reset();
         self.state.paused = false;
         self.labels_dirty.mark_game_dirty();
+        self.active_snapshot = None;
+        self.active_anim = None;
     }
 
     pub fn toggle_settings(&mut self) {
@@ -240,6 +248,74 @@ impl UiState {
         self.flash_mask.fill(false);
         self.active_mask.fill(false);
         self.ghost_mask.fill(false);
+    }
+
+    pub fn update_active_animation(&mut self, now: Instant) {
+        let current = self.snapshot_active();
+        let Some(previous) = self.active_snapshot else {
+            self.active_snapshot = Some(current);
+            return;
+        };
+
+        if previous == current {
+            return;
+        }
+
+        if previous.kind != current.kind {
+            self.active_snapshot = Some(current);
+            self.active_anim = None;
+            return;
+        }
+
+        let dx = current.x - previous.x;
+        let dy = current.y - previous.y;
+        let rotation_changed = previous.rotation != current.rotation;
+
+        if dy != 0 {
+            self.active_snapshot = Some(current);
+            self.active_anim = None;
+            return;
+        }
+
+        if dx.abs() > 1 {
+            self.active_snapshot = Some(current);
+            self.active_anim = None;
+            return;
+        }
+
+        let duration_ms = if rotation_changed { 50 } else { 35 };
+        self.active_anim = Some(ActiveAnimation {
+            from: previous,
+            to: current,
+            started_at: now,
+            duration_ms,
+        });
+        self.active_snapshot = Some(current);
+    }
+
+    pub(crate) fn active_animation_state(&self, now: Instant) -> Option<ActiveAnimationState> {
+        let anim = self.active_anim.as_ref()?;
+        let elapsed = now.duration_since(anim.started_at).as_millis() as u64;
+        if elapsed >= anim.duration_ms {
+            return None;
+        }
+
+        let progress = (elapsed as f32 / anim.duration_ms as f32).clamp(0.0, 1.0);
+        Some(ActiveAnimationState {
+            kind: anim.to.kind,
+            from_x: anim.from.x,
+            from_y: anim.from.y,
+            from_rotation: anim.from.rotation,
+            to_x: anim.to.x,
+            to_y: anim.to.y,
+            to_rotation: anim.to.rotation,
+            progress,
+            rotation_changed: anim.from.rotation != anim.to.rotation,
+        })
+    }
+
+    pub(crate) fn active_snapshot(&self) -> ActiveSnapshot {
+        self.snapshot_active()
     }
 
     pub fn preview_mask(
@@ -343,6 +419,43 @@ impl UiState {
             );
         }
     }
+
+    fn snapshot_active(&self) -> ActiveSnapshot {
+        ActiveSnapshot {
+            kind: self.state.active.kind,
+            x: self.state.active.x,
+            y: self.state.active.y,
+            rotation: self.state.active.rotation,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ActiveSnapshot {
+    pub kind: TetrominoType,
+    pub x: i32,
+    pub y: i32,
+    pub rotation: Rotation,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ActiveAnimation {
+    from: ActiveSnapshot,
+    to: ActiveSnapshot,
+    started_at: Instant,
+    duration_ms: u64,
+}
+
+pub(crate) struct ActiveAnimationState {
+    pub kind: TetrominoType,
+    pub from_x: i32,
+    pub from_y: i32,
+    pub from_rotation: Rotation,
+    pub to_x: i32,
+    pub to_y: i32,
+    pub to_rotation: Rotation,
+    pub progress: f32,
+    pub rotation_changed: bool,
 }
 
 #[derive(Clone)]

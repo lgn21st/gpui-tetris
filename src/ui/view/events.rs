@@ -48,6 +48,13 @@ impl TetrisView {
                 let actions = self.input.set_keyboard_right(true);
                 self.apply_input_actions(&actions);
             }
+            "down" => {
+                if !self.ui.can_accept_game_input() {
+                    return;
+                }
+                let actions = self.input.set_keyboard_down(true);
+                self.apply_input_actions(&actions);
+            }
             _ => {}
         }
 
@@ -77,6 +84,10 @@ impl TetrisView {
             }
             "right" => {
                 let actions = self.input.set_keyboard_right(false);
+                self.apply_input_actions(&actions);
+            }
+            "down" => {
+                let actions = self.input.set_keyboard_down(false);
                 self.apply_input_actions(&actions);
             }
             _ => {}

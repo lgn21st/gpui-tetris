@@ -17,6 +17,7 @@ pub struct InputState {
     down_repeat: RepeatState,
     keyboard_left_held: bool,
     keyboard_right_held: bool,
+    keyboard_down_held: bool,
     last_dir: Option<AxisDirection>,
     gilrs: Option<Gilrs>,
     gamepad_id: Option<GamepadId>,
@@ -71,6 +72,7 @@ impl InputState {
             down_repeat: RepeatState::new(),
             keyboard_left_held: false,
             keyboard_right_held: false,
+            keyboard_down_held: false,
             last_dir: None,
             gilrs,
             gamepad_id,
@@ -105,9 +107,19 @@ impl InputState {
         std::mem::take(&mut self.temp_actions)
     }
 
+    pub fn set_keyboard_down(&mut self, held: bool) -> Vec<InputAction> {
+        self.keyboard_down_held = held;
+        let mut temp = std::mem::take(&mut self.temp_actions);
+        temp.clear();
+        self.sync_soft_drop_hold(&mut temp);
+        self.temp_actions = temp;
+        std::mem::take(&mut self.temp_actions)
+    }
+
     pub fn clear_focus_state(&mut self) {
         self.keyboard_left_held = false;
         self.keyboard_right_held = false;
+        self.keyboard_down_held = false;
         self.clear_controller_state();
     }
 
@@ -290,14 +302,9 @@ impl InputState {
 
         if down != self.controller_down_held {
             self.controller_down_held = down;
-            if down {
-                if self.down_repeat.press() {
-                    out.push(InputAction::recorded(GameAction::SoftDrop));
-                }
-            } else {
-                self.down_repeat.release();
-            }
         }
+
+        self.sync_soft_drop_hold(out);
     }
 
     fn clear_controller_state(&mut self) {
@@ -310,12 +317,25 @@ impl InputState {
         self.controller_left_held = false;
         self.controller_right_held = false;
         self.controller_down_held = false;
-        self.down_repeat.release();
         let mut temp = std::mem::take(&mut self.temp_actions);
         temp.clear();
         self.sync_movement_holds_append(&mut temp);
+        self.sync_soft_drop_hold(&mut temp);
         temp.clear();
         self.temp_actions = temp;
+    }
+
+    fn sync_soft_drop_hold(&mut self, out: &mut Vec<InputAction>) {
+        let down = self.keyboard_down_held || self.controller_down_held;
+        if down != self.down_repeat.is_held() {
+            if down {
+                if self.down_repeat.press() {
+                    out.push(InputAction::recorded(GameAction::SoftDrop));
+                }
+            } else {
+                self.down_repeat.release();
+            }
+        }
     }
 }
 

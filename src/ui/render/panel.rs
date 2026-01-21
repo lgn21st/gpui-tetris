@@ -12,13 +12,15 @@ pub fn render_lock_bar(
     const BAR_WIDTH: f32 = 140.0;
     const BAR_HEIGHT: f32 = 6.0;
 
-    if !grounded || lock_delay_ms == 0 {
-        return div().hidden();
-    }
+    let active = grounded && lock_delay_ms > 0;
 
     let bar_width = BAR_WIDTH * scale;
     let bar_height = BAR_HEIGHT * scale;
-    let ratio = (lock_timer_ms as f32 / lock_delay_ms as f32).clamp(0.0, 1.0);
+    let ratio = if active {
+        (lock_timer_ms as f32 / lock_delay_ms as f32).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     let fill_width = bar_width * ratio;
     let fill_color = if ratio > 0.8 {
         theme::lock_bar_danger()
@@ -32,6 +34,7 @@ pub fn render_lock_bar(
         .flex()
         .flex_col()
         .gap_1()
+        .opacity(if active { 1.0 } else { 0.0 })
         .child(
             div()
                 .text_size(px(BASE_PANEL_TEXT * scale * 0.95))

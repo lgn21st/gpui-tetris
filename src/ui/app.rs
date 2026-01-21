@@ -53,7 +53,6 @@ pub fn run() {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.bind_keys([
-            KeyBinding::new("down", SoftDrop, None),
             KeyBinding::new("up", RotateCw, None),
             KeyBinding::new("space", HardDrop, None),
             KeyBinding::new("c", Hold, None),
