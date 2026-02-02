@@ -3,7 +3,7 @@ use gpui::{IntoElement, div, prelude::*, px};
 use crate::ui::render::theme;
 use crate::ui::render::{
     OverlayState, render_active_piece, render_cell, render_game_over_tint, render_line_clear_flash,
-    render_lock_bar, render_lock_warning, render_overlay, render_preview,
+    render_lock_bar, render_lock_warning, render_overlay, render_preview, render_preview_compact,
 };
 use crate::ui::style::{
     BASE_CELL_SIZE, BASE_GAP, BASE_PADDING, BASE_PANEL_TEXT, BASE_WINDOW_WIDTH, BOARD_COLS,
@@ -184,6 +184,13 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
     let next_1 = ui.state.next_queue.first().copied();
     let next_2 = ui.state.next_queue.get(1).copied();
     let next_3 = ui.state.next_queue.get(2).copied();
+    let next_gap = layout.gap * 0.35;
+    let panel_width = layout.panel_width.max(layout.cell_size * 4.0);
+    let panel_inner_width = (panel_width - layout.padding * 1.5).max(1.0);
+    // render_preview uses a 4x4 grid where each cell is 0.6 * input size.
+    let preview_width_factor = 4.0 * 0.6;
+    let fit_size = (panel_inner_width - next_gap * 2.0) / (3.0 * preview_width_factor);
+    let next_preview_cell = fit_size.clamp(layout.cell_size * 0.45, layout.cell_size * 1.05);
 
     div()
         .w(px(layout.panel_width.max(layout.cell_size * 4.0)))
@@ -251,7 +258,7 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
                         .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
                         .child("Hold"),
                 )
-                .child(render_preview(ui, ui.state.hold, layout.cell_size)),
+                .child(render_preview_compact(ui, ui.state.hold, layout.cell_size)),
         )
         .child(
             div()
@@ -263,8 +270,13 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
                         .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
                         .child("Next"),
                 )
-                .child(render_preview(ui, next_1, layout.cell_size))
-                .child(render_preview(ui, next_2, layout.cell_size))
-                .child(render_preview(ui, next_3, layout.cell_size)),
+                .child(
+                    div()
+                        .flex()
+                        .gap(px(next_gap))
+                        .child(render_preview(ui, next_1, next_preview_cell))
+                        .child(render_preview(ui, next_2, next_preview_cell))
+                        .child(render_preview(ui, next_3, next_preview_cell)),
+                ),
         )
 }

@@ -69,7 +69,6 @@ pub fn render_preview(
 ) -> impl IntoElement + use<> {
     const PREVIEW_SIZE: usize = 4;
     let filled = ui.preview_mask(kind);
-
     let mut rows = Vec::with_capacity(PREVIEW_SIZE);
     for row_filled in filled.iter().take(PREVIEW_SIZE) {
         let mut row = div().flex();
@@ -85,6 +84,59 @@ pub fn render_preview(
         .border(px(1.0))
         .border_color(theme::ghost_fill())
         .child(div().flex().flex_col().children(rows))
+}
+
+pub fn render_preview_compact(
+    ui: &mut UiState,
+    kind: Option<TetrominoType>,
+    cell_size: f32,
+) -> impl IntoElement + use<> {
+    const PREVIEW_SIZE: usize = 4;
+    let filled = ui.preview_mask(kind);
+    let bounds = preview_bounds(filled).unwrap_or((0, PREVIEW_SIZE - 1, 0, PREVIEW_SIZE - 1));
+    let (min_x, max_x, min_y, max_y) = bounds;
+
+    let mut rows = Vec::with_capacity(max_y - min_y + 1);
+    for row_filled in filled.iter().take(max_y + 1).skip(min_y) {
+        let mut row = div().flex();
+        for &cell_filled in row_filled.iter().take(max_x + 1).skip(min_x) {
+            let cell_kind = if cell_filled { kind } else { None };
+            row = row.child(render_preview_cell(cell_kind, cell_size));
+        }
+        rows.push(row);
+    }
+
+    div()
+        .bg(theme::app_bg())
+        .border(px(1.0))
+        .border_color(theme::ghost_fill())
+        .child(div().flex().flex_col().children(rows))
+}
+
+fn preview_bounds(mask: &[[bool; 4]; 4]) -> Option<(usize, usize, usize, usize)> {
+    let mut min_x = 4;
+    let mut min_y = 4;
+    let mut max_x = 0;
+    let mut max_y = 0;
+    let mut found = false;
+
+    for (y, row) in mask.iter().enumerate() {
+        for (x, filled) in row.iter().enumerate() {
+            if *filled {
+                found = true;
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
+            }
+        }
+    }
+
+    if found {
+        Some((min_x, max_x, min_y, max_y))
+    } else {
+        None
+    }
 }
 
 fn render_preview_cell(kind: Option<TetrominoType>, cell_size: f32) -> impl IntoElement {
