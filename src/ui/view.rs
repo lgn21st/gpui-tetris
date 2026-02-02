@@ -52,7 +52,7 @@ impl TetrisView {
             tick_accumulator_ms: 0,
             focus_handle,
             input: InputState::new(),
-            was_focused: true,
+            was_focused: false,
             input_actions: Vec::with_capacity(16),
         }
     }
