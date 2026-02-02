@@ -22,7 +22,7 @@ fn rotate_kicks_inside_right_wall() {
     state.active.rotation = Rotation::North;
 
     state.apply_action(GameAction::RotateCw);
-    assert!(state.active.x <= BOARD_WIDTH as i32 - 1);
+    assert!(state.active.x < BOARD_WIDTH as i32);
 }
 
 #[test]

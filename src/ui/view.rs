@@ -1,6 +1,7 @@
 use gpui::{
     Context, FocusHandle, IntoElement, MouseButton, Render, Window, div, prelude::*, px, rgb,
 };
+use gpui_tetris::adapter::SocketAdapter;
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::state::{GameConfig, GameState};
@@ -15,6 +16,7 @@ mod events;
 
 pub struct TetrisView {
     ui: UiState,
+    adapter: Option<SocketAdapter>,
     last_tick: Option<Instant>,
     focus_handle: FocusHandle,
     input: InputState,
@@ -25,9 +27,26 @@ pub struct TetrisView {
 impl TetrisView {
     pub fn new(cx: &mut Context<Self>, audio: Option<AudioEngine>) -> Self {
         let state = GameState::new(1, GameConfig::default());
+        let adapter = match SocketAdapter::from_env() {
+            Ok(adapter) => adapter,
+            Err(err) => {
+                eprintln!("adapter disabled: {err}");
+                None
+            }
+        };
+        if let Some(adapter) = &adapter
+            && let Some(addr) = adapter.local_addr()
+        {
+            eprintln!("adapter listening on tcp://{addr}");
+        }
         let focus_handle = cx.focus_handle();
+        let mut ui = UiState::new(state, audio);
+        if adapter.is_some() {
+            ui.start_game();
+        }
         Self {
-            ui: UiState::new(state, audio),
+            ui,
+            adapter,
             last_tick: None,
             focus_handle,
             input: InputState::new(),
@@ -96,6 +115,11 @@ impl TetrisView {
     fn advance_frame(&mut self, now: Instant) {
         self.input.poll_controller_into(&mut self.input_actions);
         self.apply_buffered_actions();
+        if let Some(adapter) = self.adapter.as_mut()
+            && adapter.poll_and_apply(&mut self.ui.state)
+        {
+            self.ui.mark_game_dirty();
+        }
 
         if let Some(prev) = self.last_tick {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
@@ -111,6 +135,9 @@ impl TetrisView {
             }
         }
         self.ui.update_active_animation(now);
+        if let Some(adapter) = self.adapter.as_mut() {
+            adapter.emit_observation(&self.ui.state);
+        }
         self.last_tick = Some(now);
     }
 }

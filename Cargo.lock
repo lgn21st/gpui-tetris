@@ -2266,6 +2266,8 @@ dependencies = [
  "gilrs",
  "gpui",
  "hound",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

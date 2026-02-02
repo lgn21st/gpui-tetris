@@ -54,6 +54,22 @@ cargo fmt    # format code
 cargo clippy # lint
 ```
 
+## AI Adapter (TCP)
+The app can expose a line-delimited JSON TCP adapter for external AI control (see `docs/adapter-protocol.md`).
+
+Environment variables:
+- `TETRIS_AI_DISABLED=1` disable adapter.
+- `TETRIS_AI_HOST` bind host (default `127.0.0.1`).
+- `TETRIS_AI_PORT` bind port (default `7777`).
+- `TETRIS_AI_IDLE_TIMEOUT_MS` idle disconnect timeout (`<=0` disables).
+- `TETRIS_AI_MAX_PENDING` max buffered commands (default `64`).
+- `TETRIS_AI_OBSERVATION_MS` observation interval in ms (`0` means every frame).
+- `TETRIS_AI_LOG_PATH` wire log path (`auto` creates `/tmp/tetris-ai-adapter-*.jsonl`).
+
+Quick self-check:
+- Protocol mismatch: send `hello` with `protocol_version` major different from server (for example `3.0.0`), expect `error.code = "protocol_mismatch"`.
+- Backpressure: set `TETRIS_AI_MAX_PENDING=1`, then send two controller `command` messages quickly, expect one `ack` and one `error.code = "backpressure"`.
+
 ## macOS Packaging & Icon
 This project is configured to include the app icon when bundling on macOS. The icon file is:
 

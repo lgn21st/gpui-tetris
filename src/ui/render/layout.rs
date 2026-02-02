@@ -2,9 +2,8 @@ use gpui::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::render::{
-    OverlayState, render_active_piece, render_cell, render_game_over_tint,
-    render_line_clear_flash, render_lock_bar, render_lock_warning, render_overlay,
-    render_preview,
+    OverlayState, render_active_piece, render_cell, render_game_over_tint, render_line_clear_flash,
+    render_lock_bar, render_lock_warning, render_overlay, render_preview,
 };
 use crate::ui::style::{
     BASE_CELL_SIZE, BASE_GAP, BASE_PADDING, BASE_PANEL_TEXT, BASE_WINDOW_WIDTH, BOARD_COLS,
@@ -145,12 +144,7 @@ fn render_active_overlay(
         let to_piece = gpui_tetris::game::pieces::Tetromino::new(anim.kind, 0, 0);
         let to_blocks = to_piece.blocks(anim.to_rotation);
         layer = layer.child(render_active_piece(
-            anim.kind,
-            &to_blocks,
-            offset_x,
-            offset_y,
-            cell_size,
-            1.0,
+            anim.kind, &to_blocks, offset_x, offset_y, cell_size, 1.0,
         ));
 
         if anim.rotation_changed && anim.from_rotation != anim.to_rotation {

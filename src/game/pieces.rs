@@ -9,7 +9,7 @@ pub enum TetrominoType {
     L,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Rotation {
     North,
     East,
