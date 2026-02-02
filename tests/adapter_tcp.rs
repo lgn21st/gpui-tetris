@@ -37,6 +37,11 @@ fn send_json_line(stream: &mut TcpStream, value: Value) {
     stream.write_all(&bytes).expect("write line");
 }
 
+fn send_raw_line(stream: &mut TcpStream, bytes: &[u8]) {
+    stream.write_all(bytes).expect("write bytes");
+    stream.write_all(b"\n").expect("write newline");
+}
+
 fn try_read_json_line(stream: &mut TcpStream) -> Option<Value> {
     let mut buf = Vec::new();
     loop {
@@ -100,6 +105,10 @@ fn wait_for_observation(
 }
 
 fn hello(seq: u64) -> Value {
+    hello_with_mode(seq, "action")
+}
+
+fn hello_with_mode(seq: u64, mode: &str) -> Value {
     serde_json::json!({
         "type":"hello",
         "seq":seq,
@@ -107,7 +116,7 @@ fn hello(seq: u64) -> Value {
         "client":{"name":"test","version":"0.1.0"},
         "protocol_version":"2.0.0",
         "formats":["json"],
-        "requested":{"stream_observations":true,"command_mode":"action"}
+        "requested":{"stream_observations":true,"command_mode":mode}
     })
 }
 
@@ -121,6 +130,266 @@ fn hello_receives_welcome() {
 
     assert_eq!(welcome["seq"], 1);
     assert_eq!(welcome["protocol_version"], "2.0.0");
+}
+
+#[test]
+fn command_before_hello_receives_handshake_required() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    send_json_line(
+        &mut client,
+        serde_json::json!({
+            "type":"command",
+            "seq":1,
+            "ts":1,
+            "mode":"action",
+            "actions":["moveLeft"]
+        }),
+    );
+
+    let error = wait_for_type(&mut client, &mut adapter, &mut state, "error");
+    assert_eq!(error["seq"], 1);
+    assert_eq!(error["code"], "handshake_required");
+}
+
+#[test]
+fn control_before_hello_receives_handshake_required() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    send_json_line(
+        &mut client,
+        serde_json::json!({"type":"control","seq":1,"ts":1,"action":"claim"}),
+    );
+
+    let error = wait_for_type(&mut client, &mut adapter, &mut state, "error");
+    assert_eq!(error["seq"], 1);
+    assert_eq!(error["code"], "handshake_required");
+}
+
+#[test]
+fn invalid_json_receives_invalid_command() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    send_raw_line(&mut client, br#"{"type":"hello""#);
+
+    let error = wait_for_type(&mut client, &mut adapter, &mut state, "error");
+    assert_eq!(error["seq"], 0);
+    assert_eq!(error["code"], "invalid_command");
+}
+
+#[test]
+fn welcome_includes_required_capabilities() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    send_json_line(&mut client, hello(1));
+    let welcome = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
+
+    assert_eq!(welcome["type"], "welcome");
+    assert!(welcome.get("ts").is_some());
+    assert_eq!(welcome.get("game_id").and_then(Value::as_str), Some("gpui-tetris"));
+    let formats = welcome["capabilities"]["formats"].as_array().expect("formats array");
+    assert!(formats.iter().any(|entry| entry.as_str() == Some("json")));
+    let modes = welcome["capabilities"]["command_modes"]
+        .as_array()
+        .expect("command_modes array");
+    assert!(modes.iter().any(|entry| entry.as_str() == Some("place")));
+}
+
+#[test]
+fn first_observation_is_full_snapshot() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    send_json_line(&mut client, hello(1));
+    let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
+    let obs = wait_for_observation(&mut client, &mut adapter, &mut state);
+
+    assert_eq!(obs["type"], "observation");
+    for key in ["seq", "ts", "playable", "paused", "game_over", "score", "level", "lines"] {
+        assert!(obs.get(key).is_some(), "missing {key}");
+    }
+
+    assert_eq!(obs["board"]["width"], 10);
+    assert_eq!(obs["board"]["height"], 20);
+    let cells = obs["board"]["cells"].as_array().expect("cells array");
+    assert_eq!(cells.len(), 20);
+    for row in cells {
+        let row = row.as_array().expect("cell row array");
+        assert_eq!(row.len(), 10);
+    }
+
+    for key in ["kind", "rotation", "x", "y"] {
+        assert!(obs["active"].get(key).is_some(), "missing active.{key}");
+    }
+
+    for key in ["drop_ms", "lock_ms", "line_clear_ms"] {
+        assert!(obs["timers"].get(key).is_some(), "missing timers.{key}");
+    }
+}
+
+#[test]
+fn pause_toggles_and_playable_reflects_paused() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    send_json_line(&mut client, hello(1));
+    let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
+
+    send_json_line(
+        &mut client,
+        serde_json::json!({
+            "type":"command",
+            "seq":2,
+            "ts":2,
+            "mode":"action",
+            "actions":["pause"]
+        }),
+    );
+    let ack = wait_for_type(&mut client, &mut adapter, &mut state, "ack");
+    assert_eq!(ack["seq"], 2);
+
+    let paused_obs = wait_for_observation(&mut client, &mut adapter, &mut state);
+    assert_eq!(paused_obs["paused"], true);
+    assert_eq!(paused_obs["playable"], false);
+
+    send_json_line(
+        &mut client,
+        serde_json::json!({
+            "type":"command",
+            "seq":3,
+            "ts":3,
+            "mode":"action",
+            "actions":["pause"]
+        }),
+    );
+    let ack = wait_for_type(&mut client, &mut adapter, &mut state, "ack");
+    assert_eq!(ack["seq"], 3);
+
+    let unpaused_obs = wait_for_observation(&mut client, &mut adapter, &mut state);
+    assert_eq!(unpaused_obs["paused"], false);
+    assert_eq!(unpaused_obs["game_over"], false);
+    assert_eq!(unpaused_obs["playable"], true);
+}
+
+#[test]
+fn closed_loop_stability_reconnect_smoke() {
+    let rounds: u32 = std::env::var("TETRIS_AI_STABILITY_ROUNDS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(30);
+    let max_pieces_per_round: u32 = std::env::var("TETRIS_AI_STABILITY_MAX_PIECES")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(10_000);
+
+    let (mut adapter, mut state, addr) = test_adapter();
+
+    let mut client = connect(&addr);
+    let mut next_seq: u64 = 1;
+    let send = |stream: &mut TcpStream, value: Value, seq: &mut u64| {
+        let mut value = value;
+        value["seq"] = (*seq).into();
+        value["ts"] = 1.into();
+        *seq += 1;
+        send_json_line(stream, value);
+    };
+
+    send(&mut client, hello_with_mode(0, "place"), &mut next_seq);
+    let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
+
+    let mut completed_rounds = 0_u32;
+    let mut pieces_this_round = 0_u32;
+    let mut last_activity = Instant::now();
+
+    while completed_rounds < rounds {
+        adapter.poll_and_apply(&mut state);
+        adapter.emit_observation(&state);
+
+        if let Some(message) = try_read_json_line(&mut client) {
+            last_activity = Instant::now();
+            match message.get("type").and_then(Value::as_str) {
+                Some("observation") => {
+                    let game_over = message.get("game_over").and_then(Value::as_bool) == Some(true);
+                    if game_over {
+                        send(
+                            &mut client,
+                            serde_json::json!({
+                                "type":"command",
+                                "mode":"action",
+                                "actions":["restart"]
+                            }),
+                            &mut next_seq,
+                        );
+                        completed_rounds += 1;
+                        pieces_this_round = 0;
+                        if completed_rounds == (rounds / 2).max(1) {
+                            drop(client);
+                            adapter.poll_and_apply(&mut state);
+                            client = connect(&addr);
+                            next_seq = 1;
+                            send(&mut client, hello_with_mode(0, "place"), &mut next_seq);
+                            let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
+                        }
+                        continue;
+                    }
+
+                    let active = &message["active"];
+                    let x = active["x"].as_i64().unwrap_or(0) as i32;
+                    let rotation = active["rotation"].as_str().unwrap_or("north");
+                    send(
+                        &mut client,
+                        serde_json::json!({
+                            "type":"command",
+                            "mode":"place",
+                            "place":{"x":x,"rotation":rotation,"useHold":false}
+                        }),
+                        &mut next_seq,
+                    );
+                    pieces_this_round += 1;
+                    assert!(
+                        pieces_this_round <= max_pieces_per_round,
+                        "round did not terminate within piece limit"
+                    );
+                }
+                _ => {}
+            }
+        } else {
+            thread::sleep(Duration::from_millis(1));
+        }
+
+        assert!(
+            Instant::now().duration_since(last_activity) < Duration::from_secs(3),
+            "no adapter activity; possible hang"
+        );
+    }
+}
+
+#[test]
+fn mixed_command_modes_are_accepted() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    send_json_line(&mut client, hello_with_mode(1, "action"));
+    let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
+
+    send_json_line(
+        &mut client,
+        serde_json::json!({
+            "type":"command",
+            "seq":2,
+            "ts":2,
+            "mode":"place",
+            "place":{"x":3,"rotation":"north","useHold":false}
+        }),
+    );
+
+    let ack = wait_for_type(&mut client, &mut adapter, &mut state, "ack");
+    assert_eq!(ack["seq"], 2);
+    assert_eq!(ack["status"], "ok");
 }
 
 #[test]

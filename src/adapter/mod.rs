@@ -488,18 +488,6 @@ impl SocketAdapter {
             );
             return;
         }
-        if let Some(client) = self.clients.get(&connection_id)
-            && let Some(mode) = client.requested_mode
-            && command.mode != mode
-        {
-            self.send_error(
-                connection_id,
-                seq,
-                "invalid_command",
-                "Unsupported command mode.",
-            );
-            return;
-        }
         if self.pending_commands.len() >= self.config.max_pending_commands {
             self.send_error(connection_id, seq, "backpressure", "Command queue full.");
             return;
