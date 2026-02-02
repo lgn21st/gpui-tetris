@@ -49,6 +49,7 @@ pub fn render_board(
 ) -> impl IntoElement + use<> {
     ui.sync_board_cache();
     let show_active = !ui.state.is_line_clear_active();
+    let show_ghost = show_active && !ui.state.is_grounded() && ui.state.active_moved_since_spawn;
     let cols = BOARD_COLS_USIZE as i32;
     let rows = BOARD_ROWS_USIZE as i32;
     ui.clear_render_masks();
@@ -66,7 +67,7 @@ pub fn render_board(
         }
     }
 
-    if show_active {
+    if show_ghost {
         for (x, y) in ui.state.ghost_blocks().iter() {
             set_mask(&mut ui.ghost_mask, *x, *y);
         }
@@ -82,7 +83,7 @@ pub fn render_board(
             let mut is_ghost = false;
             let is_flash = ui.flash_mask[idx];
 
-            if show_active && ui.ghost_mask[idx] {
+            if show_ghost && ui.ghost_mask[idx] {
                 cell_kind = Some(ui.state.active.kind);
                 is_ghost = true;
             }
@@ -103,9 +104,9 @@ pub fn render_board(
         .child(render_active_overlay(ui, layout, show_active, now))
         .child(render_line_clear_flash(ui.state.line_clear_timer_ms > 0))
         .child(render_lock_warning(if ui.state.is_grounded() {
-            0.0
-        } else {
             ui.state.lock_warning_intensity()
+        } else {
+            0.0
         }))
         .child(render_game_over_tint(ui.state.game_over))
         .child(render_overlay(&OverlayState {
@@ -180,6 +181,10 @@ fn render_active_overlay(
 }
 
 pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement + use<> {
+    let next_1 = ui.state.next_queue.first().copied();
+    let next_2 = ui.state.next_queue.get(1).copied();
+    let next_3 = ui.state.next_queue.get(2).copied();
+
     div()
         .w(px(layout.panel_width.max(layout.cell_size * 4.0)))
         .h(px(layout.board_height))
@@ -258,10 +263,8 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
                         .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
                         .child("Next"),
                 )
-                .child(render_preview(
-                    ui,
-                    ui.state.next_queue.first().copied(),
-                    layout.cell_size,
-                )),
+                .child(render_preview(ui, next_1, layout.cell_size))
+                .child(render_preview(ui, next_2, layout.cell_size))
+                .child(render_preview(ui, next_3, layout.cell_size)),
         )
 }

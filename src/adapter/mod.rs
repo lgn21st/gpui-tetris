@@ -109,6 +109,7 @@ struct ClientState {
     write_buf: Vec<u8>,
     handshake_complete: bool,
     stream_observations: bool,
+    requested_mode: Option<CommandMode>,
     role: ClientRole,
     join_order: u64,
     last_seq: Option<u64>,
@@ -123,6 +124,7 @@ impl ClientState {
             write_buf: Vec::with_capacity(1024),
             handshake_complete: false,
             stream_observations: false,
+            requested_mode: None,
             role: ClientRole::Observer,
             join_order,
             last_seq: None,
@@ -437,6 +439,7 @@ impl SocketAdapter {
         if let Some(client) = self.clients.get_mut(&connection_id) {
             client.handshake_complete = true;
             client.stream_observations = hello.requested.stream_observations;
+            client.requested_mode = Some(hello.requested.command_mode);
             client.role = assigned_role;
         }
         let welcome = OutMessage::Welcome(WelcomeMessage {
@@ -482,6 +485,18 @@ impl SocketAdapter {
                 seq,
                 "not_controller",
                 "Only controller may send commands.",
+            );
+            return;
+        }
+        if let Some(client) = self.clients.get(&connection_id)
+            && let Some(mode) = client.requested_mode
+            && command.mode != mode
+        {
+            self.send_error(
+                connection_id,
+                seq,
+                "invalid_command",
+                "Unsupported command mode.",
             );
             return;
         }
@@ -957,6 +972,7 @@ struct HelloMessage {
 #[derive(Deserialize)]
 struct RequestedConfig {
     stream_observations: bool,
+    command_mode: CommandMode,
 }
 
 #[derive(Deserialize)]
@@ -969,7 +985,7 @@ struct CommandMessage {
     place: Option<PlacePayload>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum CommandMode {
     Action,

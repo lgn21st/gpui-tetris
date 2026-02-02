@@ -12,12 +12,13 @@ mod types;
 use actions::{
     activate_soft_drop, apply_action, can_move_down, ghost_blocks, lock_active_piece, try_move,
 };
-use rng::{SimpleRng, ensure_queue, refill_bag};
+use rng::{SimpleRng, ensure_queue};
 use scoring::apply_line_clear;
 use timing::{drop_interval_ms, tick};
 pub use types::{GameConfig, RulesConfig, Ruleset, SoundEvent, TSpinKind};
 
-const NEXT_QUEUE_SIZE: usize = 5;
+const NEXT_QUEUE_PREVIEW_SIZE: usize = 3;
+const SPAWN_QUEUE_MIN: usize = 4;
 
 #[derive(Clone, Debug)]
 pub struct GameState {
@@ -50,6 +51,7 @@ pub struct GameState {
     pub landing_flash_timer_ms: u64,
     pub last_lock_cells: [(i32, i32); 4],
     pub ghost_cache: [(i32, i32); 4],
+    pub active_moved_since_spawn: bool,
     pub board_revision: u64,
     sound_events: Vec<SoundEvent>,
     last_action_rotate: bool,
@@ -61,6 +63,7 @@ impl GameState {
         let mut rng = SimpleRng::new(seed);
         let mut next_queue = init_next_queue(&mut rng);
         let active = spawn_first_piece(&mut next_queue);
+        ensure_queue(&mut rng, &mut next_queue, NEXT_QUEUE_PREVIEW_SIZE);
         let mut state = Self {
             board: Board::new(),
             active,
@@ -91,6 +94,7 @@ impl GameState {
             landing_flash_timer_ms: 0,
             last_lock_cells: [(0, 0); 4],
             ghost_cache: [(0, 0); 4],
+            active_moved_since_spawn: false,
             board_revision: 1,
             sound_events: Vec::new(),
             last_action_rotate: false,
@@ -101,7 +105,7 @@ impl GameState {
     }
 
     pub fn spawn_next(&mut self) {
-        ensure_queue(&mut self.rng, &mut self.next_queue);
+        ensure_queue(&mut self.rng, &mut self.next_queue, SPAWN_QUEUE_MIN);
 
         let kind = self.next_queue.remove(0);
         let (spawn_x, spawn_y) = spawn_position();
@@ -110,6 +114,7 @@ impl GameState {
         self.can_hold = true;
         self.lock_reset_count = 0;
         self.last_action_rotate = false;
+        self.active_moved_since_spawn = false;
         actions::update_ghost_cache(self);
 
         if !self.board.can_place(
@@ -234,8 +239,7 @@ impl GameState {
 
 fn init_next_queue(rng: &mut SimpleRng) -> Vec<TetrominoType> {
     let mut next_queue = Vec::new();
-    refill_bag(rng, &mut next_queue);
-    ensure_queue(rng, &mut next_queue);
+    ensure_queue(rng, &mut next_queue, SPAWN_QUEUE_MIN);
     next_queue
 }
 

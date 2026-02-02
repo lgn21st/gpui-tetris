@@ -140,10 +140,13 @@ impl UiState {
             self.labels_dirty.input = true;
         }
         if !self.started {
-            if matches!(action, GameAction::Restart | GameAction::HardDrop) {
-                self.start_game();
+            self.start_game();
+            if matches!(
+                action,
+                GameAction::Pause | GameAction::Restart | GameAction::HardDrop
+            ) {
+                return;
             }
-            return;
         }
         if self.show_settings {
             return;
@@ -575,5 +578,16 @@ mod tests {
         let empty = ui.preview_mask(None);
         let any_empty_filled = empty.iter().flatten().any(|filled| *filled);
         assert!(!any_empty_filled);
+    }
+
+    #[test]
+    fn title_input_starts_game_for_mapped_actions() {
+        let state = GameState::new(1, Default::default());
+        let mut ui = UiState::new(state, None);
+        assert!(!ui.started);
+
+        ui.receive_action(GameAction::MoveLeft);
+
+        assert!(ui.started);
     }
 }

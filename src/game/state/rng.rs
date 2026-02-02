@@ -41,11 +41,11 @@ pub(super) fn refill_bag(rng: &mut SimpleRng, queue: &mut Vec<TetrominoType>) {
         bag.swap(i, j);
     }
 
-    queue.extend_from_slice(&bag);
+    queue.extend_from_slice(&bag[..2]);
 }
 
-pub(super) fn ensure_queue(rng: &mut SimpleRng, queue: &mut Vec<TetrominoType>) {
-    while queue.len() < super::NEXT_QUEUE_SIZE {
+pub(super) fn ensure_queue(rng: &mut SimpleRng, queue: &mut Vec<TetrominoType>, min_size: usize) {
+    while queue.len() < min_size {
         refill_bag(rng, queue);
     }
 }

@@ -18,6 +18,7 @@ pub struct TetrisView {
     ui: UiState,
     adapter: Option<SocketAdapter>,
     last_tick: Option<Instant>,
+    tick_accumulator_ms: u64,
     focus_handle: FocusHandle,
     input: InputState,
     was_focused: bool,
@@ -48,6 +49,7 @@ impl TetrisView {
             ui,
             adapter,
             last_tick: None,
+            tick_accumulator_ms: 0,
             focus_handle,
             input: InputState::new(),
             was_focused: true,
@@ -124,14 +126,21 @@ impl TetrisView {
         if let Some(prev) = self.last_tick {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
             if elapsed_ms > 0 && self.ui.started && !self.ui.show_settings {
-                self.ui.state.tick(elapsed_ms, false);
-                self.ui.mark_game_dirty();
-                self.input.apply_repeats_into(
-                    elapsed_ms,
-                    self.ui.can_accept_game_input(),
-                    &mut self.input_actions,
-                );
-                self.apply_buffered_actions();
+                let step_ms = self.ui.state.tick_ms.max(1);
+                self.tick_accumulator_ms = self.tick_accumulator_ms.saturating_add(elapsed_ms);
+                while self.tick_accumulator_ms >= step_ms {
+                    self.ui.state.tick(step_ms, false);
+                    self.ui.mark_game_dirty();
+                    self.input.apply_repeats_into(
+                        step_ms,
+                        self.ui.can_accept_game_input(),
+                        &mut self.input_actions,
+                    );
+                    self.apply_buffered_actions();
+                    self.tick_accumulator_ms -= step_ms;
+                }
+            } else {
+                self.tick_accumulator_ms = 0;
             }
         }
         self.ui.update_active_animation(now);

@@ -80,6 +80,25 @@ fn wait_for_type(
     panic!("timed out waiting for {expected}");
 }
 
+fn wait_for_observation(
+    stream: &mut TcpStream,
+    adapter: &mut SocketAdapter,
+    state: &mut GameState,
+) -> Value {
+    let deadline = Instant::now() + Duration::from_millis(900);
+    while Instant::now() < deadline {
+        adapter.poll_and_apply(state);
+        adapter.emit_observation(state);
+        if let Some(message) = try_read_json_line(stream)
+            && message.get("type").and_then(Value::as_str) == Some("observation")
+        {
+            return message;
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
+    panic!("timed out waiting for observation");
+}
+
 fn hello(seq: u64) -> Value {
     serde_json::json!({
         "type":"hello",
@@ -241,4 +260,36 @@ fn command_queue_overflow_receives_backpressure() {
     let error = wait_for_type(&mut client, &mut adapter, &mut state, "error");
     assert_eq!(error["seq"], 2);
     assert_eq!(error["code"], "backpressure");
+}
+
+#[test]
+fn restart_command_transitions_to_playable_and_unpaused() {
+    let (mut adapter, mut state, addr) = test_adapter();
+    let mut client = connect(&addr);
+
+    state.paused = true;
+    state.game_over = false;
+
+    send_json_line(&mut client, hello(1));
+    let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
+
+    send_json_line(
+        &mut client,
+        serde_json::json!({
+            "type":"command",
+            "seq":2,
+            "ts":2,
+            "mode":"action",
+            "actions":["restart"]
+        }),
+    );
+
+    let ack = wait_for_type(&mut client, &mut adapter, &mut state, "ack");
+    assert_eq!(ack["seq"], 2);
+    assert_eq!(ack["status"], "ok");
+
+    let observation = wait_for_observation(&mut client, &mut adapter, &mut state);
+    assert_eq!(observation["playable"], true);
+    assert_eq!(observation["paused"], false);
+    assert_eq!(observation["game_over"], false);
 }

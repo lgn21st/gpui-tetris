@@ -72,3 +72,16 @@ fn paused_blocks_actions_except_pause_and_restart() {
     state.apply_action(GameAction::Pause);
     assert!(!state.paused);
 }
+
+#[test]
+fn pausing_clears_soft_drop_state() {
+    let mut state = GameState::new(6, GameConfig::default());
+    state.soft_drop_active = true;
+    state.soft_drop_timeout_ms = 123;
+
+    state.apply_action(GameAction::Pause);
+
+    assert!(state.paused);
+    assert!(!state.soft_drop_active);
+    assert_eq!(state.soft_drop_timeout_ms, 0);
+}

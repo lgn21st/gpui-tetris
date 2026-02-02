@@ -69,6 +69,7 @@ fn handle_hold(state: &mut GameState) {
     if let Some(held_kind) = state.hold {
         state.hold = Some(current_kind);
         state.active = spawn_piece(state, held_kind);
+        state.active_moved_since_spawn = false;
     } else {
         state.hold = Some(current_kind);
         state.spawn_next();
@@ -80,6 +81,10 @@ fn handle_hold(state: &mut GameState) {
 
 fn handle_pause(state: &mut GameState) {
     state.paused = !state.paused;
+    if state.paused {
+        state.soft_drop_active = false;
+        state.soft_drop_timeout_ms = 0;
+    }
 }
 
 fn handle_restart(state: &mut GameState) {
@@ -118,6 +123,7 @@ pub(super) fn try_move(state: &mut GameState, dx: i32, dy: i32) -> bool {
     {
         state.active.x = new_x;
         state.active.y = new_y;
+        state.active_moved_since_spawn = true;
         update_ghost_cache(state);
         handle_lock_reset(state);
         return true;
@@ -142,6 +148,7 @@ pub(super) fn try_rotate(state: &mut GameState, clockwise: bool) -> bool {
             state.active.x = new_x;
             state.active.y = new_y;
             state.active.rotation = next_rotation;
+            state.active_moved_since_spawn = true;
             update_ghost_cache(state);
             handle_lock_reset(state);
             return true;

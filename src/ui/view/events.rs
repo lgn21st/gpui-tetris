@@ -35,6 +35,10 @@ impl TetrisView {
                 self.ui.close_settings();
             }
             "left" => {
+                if !self.ui.started {
+                    self.ui.start_game();
+                    return;
+                }
                 if !self.ui.can_accept_game_input() {
                     return;
                 }
@@ -42,6 +46,10 @@ impl TetrisView {
                 self.apply_input_actions(&actions);
             }
             "right" => {
+                if !self.ui.started {
+                    self.ui.start_game();
+                    return;
+                }
                 if !self.ui.can_accept_game_input() {
                     return;
                 }
@@ -49,6 +57,10 @@ impl TetrisView {
                 self.apply_input_actions(&actions);
             }
             "down" => {
+                if !self.ui.started {
+                    self.ui.start_game();
+                    return;
+                }
                 if !self.ui.can_accept_game_input() {
                     return;
                 }
