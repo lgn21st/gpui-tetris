@@ -67,7 +67,7 @@ impl RepeatState {
         let total = (self.time_since_press_ms - config.das_ms) / config.arr_ms;
         let fired = total.saturating_sub(self.repeats_fired);
         self.repeats_fired = total;
-        fired as u32
+        u32::try_from(fired).unwrap_or(u32::MAX)
     }
 
     pub fn is_held(&self) -> bool {

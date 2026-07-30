@@ -34,7 +34,7 @@ fn back_to_back_applies_to_tetris() {
 }
 
 #[test]
-fn t_spin_full_no_line_scores_and_sets_back_to_back_false() {
+fn t_spin_full_no_line_scores_and_preserves_back_to_back() {
     let mut state = GameState::new(
         3,
         GameConfig {
@@ -44,6 +44,7 @@ fn t_spin_full_no_line_scores_and_sets_back_to_back_false() {
     );
     state.active = Tetromino::new(TetrominoType::T, 3, BOARD_HEIGHT as i32 - 3);
     state.active.rotation = Rotation::East;
+    state.back_to_back = true;
 
     // Set last action rotate to enable T-spin detection.
     state.apply_action(GameAction::RotateCw);
@@ -62,7 +63,7 @@ fn t_spin_full_no_line_scores_and_sets_back_to_back_false() {
     state.apply_action(GameAction::HardDrop);
 
     assert_eq!(state.score, 400);
-    assert!(!state.back_to_back);
+    assert!(state.back_to_back);
 }
 
 #[test]

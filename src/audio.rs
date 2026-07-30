@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, TrySendError};
 
 use crate::game::state::SoundEvent;
 
@@ -17,10 +17,11 @@ pub struct AudioEngine {
 
 const DEFAULT_MASTER_GAIN: f32 = 0.6;
 const MAX_VOICES: usize = 16;
+const SOUND_QUEUE_CAPACITY: usize = 256;
 
 impl AudioEngine {
     pub fn new(asset_dir: &Path) -> anyhow::Result<Self> {
-        let (tx, rx) = crossbeam_channel::unbounded();
+        let (tx, rx) = crossbeam_channel::bounded(SOUND_QUEUE_CAPACITY);
         let assets = load_assets(asset_dir)?;
         let master_gain = Arc::new(AtomicU32::new(f32_to_bits(DEFAULT_MASTER_GAIN)));
 
@@ -35,7 +36,7 @@ impl AudioEngine {
     }
 
     pub fn play(&self, event: SoundEvent) {
-        let _ = self.sender.send(event);
+        let _ = try_enqueue_sound(&self.sender, event);
     }
 
     pub fn set_master_gain(&self, gain: f32) {
@@ -151,7 +152,7 @@ fn build_output_stream_f32(
     } = params;
     device
         .build_output_stream(
-            &config.clone().into(),
+            (*config).into(),
             move |data: &mut [f32], _| {
                 let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
                 render_audio(data, channels, sample_rate, &rx, &assets, &voices, gain);
@@ -180,7 +181,7 @@ fn build_output_stream_i16(
     let mut scratch: Vec<f32> = Vec::new();
     device
         .build_output_stream(
-            &config.clone().into(),
+            (*config).into(),
             move |data: &mut [i16], _| {
                 if scratch.len() != data.len() {
                     scratch.resize(data.len(), 0.0);
@@ -223,7 +224,7 @@ fn build_output_stream_u16(
     let mut scratch: Vec<f32> = Vec::new();
     device
         .build_output_stream(
-            &config.clone().into(),
+            (*config).into(),
             move |data: &mut [u16], _| {
                 if scratch.len() != data.len() {
                     scratch.resize(data.len(), 0.0);
@@ -265,7 +266,10 @@ fn select_output_config(device: &cpal::Device) -> anyhow::Result<cpal::Supported
         }
     }
 
-    Ok(selected.unwrap_or_else(|| device.default_output_config().unwrap()))
+    match selected {
+        Some(config) => Ok(config),
+        None => Ok(device.default_output_config()?),
+    }
 }
 
 fn render_audio(
@@ -278,16 +282,15 @@ fn render_audio(
     master_gain: f32,
 ) {
     for event in rx.try_iter() {
-        if let Some(asset_key) = sound_event_to_asset(&event)
-            && let Some(asset) = assets.get(asset_key)
-        {
+        let (asset_key, gain) = sound_event_spec(&event);
+        if let Some(asset) = assets.get(asset_key) {
             let step = asset.sample_rate as f32 / device_rate as f32;
             let voice = Voice {
                 samples: asset.samples.clone(),
                 channels: asset.channels,
                 position: 0.0,
                 step,
-                gain: sound_event_gain(&event),
+                gain,
             };
             if let Ok(mut guard) = voices.lock() {
                 push_voice(&mut guard, voice);
@@ -347,11 +350,35 @@ fn render_audio(
 fn load_wav(path: &Path) -> anyhow::Result<SoundAsset> {
     let mut reader = hound::WavReader::open(path)?;
     let spec = reader.spec();
-    let samples: Vec<f32> = reader
-        .samples::<i16>()
-        .filter_map(Result::ok)
-        .map(|s| s as f32 / i16::MAX as f32)
-        .collect();
+    if spec.channels == 0 || spec.sample_rate == 0 || !(1..=32).contains(&spec.bits_per_sample) {
+        return Err(anyhow::anyhow!(
+            "WAV must have channels, sample rate, and 1..=32 bits per sample"
+        ));
+    }
+    let samples: Vec<f32> = match spec.sample_format {
+        hound::SampleFormat::Float => reader.samples::<f32>().collect::<Result<_, _>>()?,
+        hound::SampleFormat::Int if spec.bits_per_sample <= 8 => {
+            let peak = ((1_i64 << (spec.bits_per_sample - 1)) - 1).max(1) as f32;
+            reader
+                .samples::<i8>()
+                .map(|sample| sample.map(|value| value as f32 / peak))
+                .collect::<Result<_, _>>()?
+        }
+        hound::SampleFormat::Int if spec.bits_per_sample <= 16 => {
+            let peak = ((1_i64 << (spec.bits_per_sample - 1)) - 1) as f32;
+            reader
+                .samples::<i16>()
+                .map(|sample| sample.map(|value| value as f32 / peak))
+                .collect::<Result<_, _>>()?
+        }
+        hound::SampleFormat::Int => {
+            let peak = ((1_i64 << (spec.bits_per_sample - 1)) - 1) as f32;
+            reader
+                .samples::<i32>()
+                .map(|sample| sample.map(|value| value as f32 / peak))
+                .collect::<Result<_, _>>()?
+        }
+    };
 
     Ok(SoundAsset {
         samples: Arc::new(samples),
@@ -360,61 +387,25 @@ fn load_wav(path: &Path) -> anyhow::Result<SoundAsset> {
     })
 }
 
-pub fn sound_event_to_asset(event: &SoundEvent) -> Option<&'static str> {
-    Some(sound_spec(event).key)
+fn try_enqueue_sound(sender: &Sender<SoundEvent>, event: SoundEvent) -> bool {
+    match sender.try_send(event) {
+        Ok(()) => true,
+        Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => false,
+    }
 }
 
-pub fn sound_event_gain(event: &SoundEvent) -> f32 {
-    sound_spec(event).gain
-}
-
-struct SoundSpec {
-    key: &'static str,
-    gain: f32,
-}
-
-fn sound_spec(event: &SoundEvent) -> SoundSpec {
+pub fn sound_event_spec(event: &SoundEvent) -> (&'static str, f32) {
     match event {
-        SoundEvent::Move => SoundSpec {
-            key: "move",
-            gain: 0.25,
-        },
-        SoundEvent::Rotate => SoundSpec {
-            key: "rotate",
-            gain: 0.35,
-        },
-        SoundEvent::SoftDrop => SoundSpec {
-            key: "soft_drop",
-            gain: 0.2,
-        },
-        SoundEvent::HardDrop => SoundSpec {
-            key: "hard_drop",
-            gain: 0.6,
-        },
-        SoundEvent::Hold => SoundSpec {
-            key: "hold",
-            gain: 0.5,
-        },
-        SoundEvent::LineClear(1) => SoundSpec {
-            key: "line_clear_1",
-            gain: 0.6,
-        },
-        SoundEvent::LineClear(2) => SoundSpec {
-            key: "line_clear_2",
-            gain: 0.7,
-        },
-        SoundEvent::LineClear(3) => SoundSpec {
-            key: "line_clear_3",
-            gain: 0.8,
-        },
-        SoundEvent::LineClear(_) => SoundSpec {
-            key: "line_clear_4",
-            gain: 0.9,
-        },
-        SoundEvent::GameOver => SoundSpec {
-            key: "game_over",
-            gain: 0.8,
-        },
+        SoundEvent::Move => ("move", 0.25),
+        SoundEvent::Rotate => ("rotate", 0.35),
+        SoundEvent::SoftDrop => ("soft_drop", 0.2),
+        SoundEvent::HardDrop => ("hard_drop", 0.6),
+        SoundEvent::Hold => ("hold", 0.5),
+        SoundEvent::LineClear(1) => ("line_clear_1", 0.6),
+        SoundEvent::LineClear(2) => ("line_clear_2", 0.7),
+        SoundEvent::LineClear(3) => ("line_clear_3", 0.8),
+        SoundEvent::LineClear(_) => ("line_clear_4", 0.9),
+        SoundEvent::GameOver => ("game_over", 0.8),
     }
 }
 
@@ -469,5 +460,35 @@ mod tests {
     fn master_gain_bits_roundtrip() {
         let value = 0.42;
         assert_eq!(bits_to_f32(f32_to_bits(value)), value);
+    }
+
+    #[test]
+    fn sound_queue_drops_excess_without_growing() {
+        let (sender, receiver) = crossbeam_channel::bounded(1);
+        assert!(try_enqueue_sound(&sender, SoundEvent::Move));
+        assert!(!try_enqueue_sound(&sender, SoundEvent::Rotate));
+        assert_eq!(receiver.len(), 1);
+    }
+
+    #[test]
+    fn load_wav_accepts_float_samples() {
+        let path = std::env::temp_dir().join(format!(
+            "gpui-tetris-audio-{}-{}.wav",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 44_100,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut writer = hound::WavWriter::create(&path, spec).expect("create WAV");
+        writer.write_sample(0.5_f32).expect("write sample");
+        writer.finalize().expect("finalize WAV");
+
+        let asset = load_wav(&path).expect("load float WAV");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(asset.samples.as_slice(), &[0.5]);
     }
 }

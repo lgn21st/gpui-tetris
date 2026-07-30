@@ -4,7 +4,7 @@ use super::{GameState, Ruleset, SoundEvent, TSpinKind};
 
 pub(super) fn apply_line_clear(state: &mut GameState, cleared: usize, t_spin: TSpinKind) {
     let qualifies_b2b = (t_spin == TSpinKind::Full && cleared > 0) || cleared == 4;
-    let level = state.level + 1;
+    let level = state.level.saturating_add(1);
     let mut points = if state.ruleset == Ruleset::Classic {
         match cleared {
             1 => state.rules.classic_line_scores[0],
@@ -39,19 +39,19 @@ pub(super) fn apply_line_clear(state: &mut GameState, cleared: usize, t_spin: TS
     };
 
     if state.ruleset == Ruleset::Modern && qualifies_b2b && state.back_to_back {
-        points = points * state.rules.b2b_bonus_num / state.rules.b2b_bonus_den;
+        points =
+            points.saturating_mul(state.rules.b2b_bonus_num) / state.rules.b2b_bonus_den.max(1);
     }
 
     if cleared > 0 {
         state.line_clear_timer_ms = 180;
-        state
-            .sound_events
-            .push(SoundEvent::LineClear(cleared as u8));
-        state.lines += cleared as u32;
+        state.push_sound_event(SoundEvent::LineClear(cleared as u8));
+        state.lines = state.lines.saturating_add(cleared as u32);
         if state.ruleset == Ruleset::Modern {
-            state.combo += 1;
+            state.combo = state.combo.saturating_add(1);
             if state.combo > 0 {
-                points += state.rules.combo_base * state.combo as u32;
+                points = points
+                    .saturating_add(state.rules.combo_base.saturating_mul(state.combo as u32));
             }
             state.back_to_back = qualifies_b2b;
         } else {
@@ -63,11 +63,13 @@ pub(super) fn apply_line_clear(state: &mut GameState, cleared: usize, t_spin: TS
         state.level = state.lines / 10;
     } else {
         state.combo = -1;
-        state.back_to_back = false;
+        if state.ruleset == Ruleset::Classic {
+            state.back_to_back = false;
+        }
     }
 
     if points > 0 {
-        state.score += points * level;
+        state.score = state.score.saturating_add(points.saturating_mul(level));
     }
 }
 

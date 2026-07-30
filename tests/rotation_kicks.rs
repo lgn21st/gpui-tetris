@@ -1,4 +1,4 @@
-use gpui_tetris::game::board::{BOARD_WIDTH, Board};
+use gpui_tetris::game::board::{BOARD_HEIGHT, BOARD_WIDTH, Board};
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
 use gpui_tetris::game::state::{GameConfig, GameState};
@@ -47,9 +47,11 @@ fn rotate_fails_when_all_kicks_blocked() {
     state.active = Tetromino::new(TetrominoType::T, 0, 0);
     state.active.rotation = Rotation::North;
 
-    for (x, y) in [(0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1)].iter() {
-        state.board.cells[*y][*x].filled = true;
-        state.board.cells[*y][*x].kind = Some(TetrominoType::O);
+    for y in 0..BOARD_HEIGHT {
+        for x in 0..BOARD_WIDTH {
+            state.board.cells[y][x].filled = true;
+            state.board.cells[y][x].kind = Some(TetrominoType::O);
+        }
     }
 
     state.apply_action(GameAction::RotateCw);
@@ -65,5 +67,5 @@ fn rotate_kicks_up_from_floor() {
 
     state.apply_action(GameAction::RotateCw);
     assert_eq!(state.active.rotation, Rotation::East);
-    assert!(state.active.y < 17);
+    assert_eq!((state.active.x, state.active.y), (4, 15));
 }

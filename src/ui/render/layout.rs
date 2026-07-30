@@ -5,11 +5,9 @@ use crate::ui::render::{
     OverlayState, render_active_piece, render_cell, render_game_over_tint, render_line_clear_flash,
     render_lock_bar, render_lock_warning, render_overlay, render_preview, render_preview_compact,
 };
-use crate::ui::style::{
-    BASE_CELL_SIZE, BASE_GAP, BASE_PADDING, BASE_PANEL_TEXT, BASE_WINDOW_WIDTH, BOARD_COLS,
-    BOARD_COLS_USIZE, BOARD_ROWS, BOARD_ROWS_USIZE,
-};
+use crate::ui::style::{BASE_GAP, BASE_PADDING, BASE_PANEL_TEXT, CELL_SIZE, WINDOW_WIDTH};
 use crate::ui::ui_state::UiState;
+use gpui_tetris::game::board::{BOARD_HEIGHT, BOARD_WIDTH};
 
 pub struct RenderLayout {
     pub scale: f32,
@@ -23,12 +21,12 @@ pub struct RenderLayout {
 
 impl RenderLayout {
     pub fn new(scale: f32) -> Self {
-        let cell_size = BASE_CELL_SIZE * scale;
+        let cell_size = CELL_SIZE * scale;
         let padding = BASE_PADDING * scale;
         let gap = BASE_GAP * scale;
-        let board_width = cell_size * BOARD_COLS;
-        let board_height = cell_size * BOARD_ROWS;
-        let panel_width = (BASE_WINDOW_WIDTH * scale) - board_width - (padding * 2.0) - gap;
+        let board_width = cell_size * BOARD_WIDTH as f32;
+        let board_height = cell_size * BOARD_HEIGHT as f32;
+        let panel_width = (WINDOW_WIDTH * scale) - board_width - (padding * 2.0) - gap;
         Self {
             scale,
             cell_size,
@@ -50,8 +48,8 @@ pub fn render_board(
     ui.sync_board_cache();
     let show_active = !ui.state.is_line_clear_active();
     let show_ghost = show_active && !ui.state.is_grounded() && ui.state.active_moved_since_spawn;
-    let cols = BOARD_COLS_USIZE as i32;
-    let rows = BOARD_ROWS_USIZE as i32;
+    let cols = BOARD_WIDTH as i32;
+    let rows = BOARD_HEIGHT as i32;
     ui.clear_render_masks();
 
     let set_mask = |mask: &mut [bool], x: i32, y: i32| {
@@ -73,11 +71,11 @@ pub fn render_board(
         }
     }
 
-    let mut rows = Vec::with_capacity(BOARD_ROWS_USIZE);
-    for y in 0..BOARD_ROWS_USIZE {
+    let mut rows = Vec::with_capacity(BOARD_HEIGHT);
+    for y in 0..BOARD_HEIGHT {
         let mut row = div().flex();
-        let row_base = y * BOARD_COLS_USIZE;
-        for x in 0..BOARD_COLS_USIZE {
+        let row_base = y * BOARD_WIDTH;
+        for x in 0..BOARD_WIDTH {
             let idx = row_base + x;
             let mut cell_kind = ui.board_cache[idx];
             let mut is_ghost = false;

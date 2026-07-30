@@ -40,3 +40,26 @@ fn emits_game_over_sound_on_spawn_blocked() {
     let events = state.take_sound_events();
     assert!(events.contains(&SoundEvent::GameOver));
 }
+
+#[test]
+fn blocked_actions_do_not_emit_success_sounds() {
+    let mut state = GameState::new(4, GameConfig::default());
+    state.active = Tetromino::new(TetrominoType::O, -2, 0);
+
+    state.apply_action(GameAction::MoveLeft);
+    state.apply_action(GameAction::RotateCw);
+
+    let events = state.take_sound_events();
+    assert!(!events.contains(&SoundEvent::Move));
+    assert!(!events.contains(&SoundEvent::Rotate));
+}
+
+#[test]
+fn sound_event_buffer_is_bounded() {
+    let mut state = GameState::new(5, GameConfig::default());
+    for _ in 0..300 {
+        state.apply_line_clear(1, TSpinKind::None);
+    }
+
+    assert_eq!(state.take_sound_events().len(), 256);
+}

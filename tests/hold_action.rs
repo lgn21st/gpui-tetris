@@ -32,6 +32,8 @@ fn hold_swaps_with_held_piece() {
     assert_eq!(state.active.x, spawn_x);
     assert_eq!(state.active.y, spawn_y);
     assert!(!state.can_hold);
+    let ghost = state.ghost_blocks();
+    assert_eq!(ghost.iter().map(|(_, y)| *y).max(), Some(19));
 }
 
 #[test]

@@ -2,24 +2,22 @@
 name = "gpui-tetris"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
 
 [dependencies]
-# gpui crate version may change; update as needed for your local setup.
-gpui = "0.2.2"
-cpal = "0.17.1"
-crossbeam-channel = "0.5"
-hound = "3.5"
-anyhow = "1.0"
-gilrs = "0.11.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+gpui = { version = "0.2.2", features = ["runtime_shaders"] }
+cpal = "0.18.1"
+crossbeam-channel = "0.5.16"
+hound = "3.5.1"
+anyhow = "1.0.104"
+gilrs = "0.11.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+semver = "1.0.28"
 
 [package.metadata.bundle]
 name = "gpui-tetris"
 identifier = "com.lyuguoning.com.gpui-tetris"
 icon = ["assets/icon.icns"]
 resources = ["assets/sfx"]
-
-[patch.crates-io]
-zed-font-kit = { path = "vendor/zed-font-kit" }
-gpui = { path = "vendor/gpui" }

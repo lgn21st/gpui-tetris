@@ -14,31 +14,38 @@ pub(super) fn apply_action(state: &mut GameState, action: GameAction) {
     }
 
     match action {
-        GameAction::MoveLeft => handle_move(state, -1),
-        GameAction::MoveRight => handle_move(state, 1),
-        GameAction::SoftDrop => handle_soft_drop(state),
-        GameAction::HardDrop => handle_hard_drop(state),
-        GameAction::RotateCw => handle_rotate(state, true),
-        GameAction::RotateCcw => handle_rotate(state, false),
-        GameAction::Hold => handle_hold(state),
-        GameAction::Pause => handle_pause(state),
         GameAction::Restart => handle_restart(state),
+        action => {
+            state.advance_logical_step();
+            match action {
+                GameAction::MoveLeft => handle_move(state, -1),
+                GameAction::MoveRight => handle_move(state, 1),
+                GameAction::SoftDrop => handle_soft_drop(state),
+                GameAction::HardDrop => handle_hard_drop(state),
+                GameAction::RotateCw => handle_rotate(state, true),
+                GameAction::RotateCcw => handle_rotate(state, false),
+                GameAction::Hold => handle_hold(state),
+                GameAction::Pause => handle_pause(state),
+                GameAction::Restart => (),
+            }
+        }
     }
 }
 
 fn handle_move(state: &mut GameState, dx: i32) {
-    try_move(state, dx, 0);
-    state.last_action_rotate = false;
-    state.sound_events.push(SoundEvent::Move);
+    if try_move(state, dx, 0) {
+        state.last_action_rotate = false;
+        state.push_sound_event(SoundEvent::Move);
+    }
 }
 
 fn handle_soft_drop(state: &mut GameState) {
     if try_move(state, 0, 1) {
         state.score = state.score.saturating_add(1);
+        state.last_action_rotate = false;
+        state.push_sound_event(SoundEvent::SoftDrop);
     }
     activate_soft_drop(state);
-    state.last_action_rotate = false;
-    state.sound_events.push(SoundEvent::SoftDrop);
 }
 
 fn handle_hard_drop(state: &mut GameState) {
@@ -49,7 +56,7 @@ fn handle_hard_drop(state: &mut GameState) {
     if dropped > 0 {
         state.score = state.score.saturating_add(dropped * 2);
     }
-    state.sound_events.push(SoundEvent::HardDrop);
+    state.push_sound_event(SoundEvent::HardDrop);
     lock_active_piece(state);
     state.lock_timer_ms = 0;
     state.drop_timer_ms = 0;
@@ -57,7 +64,9 @@ fn handle_hard_drop(state: &mut GameState) {
 
 fn handle_rotate(state: &mut GameState, clockwise: bool) {
     state.last_action_rotate = try_rotate(state, clockwise);
-    state.sound_events.push(SoundEvent::Rotate);
+    if state.last_action_rotate {
+        state.push_sound_event(SoundEvent::Rotate);
+    }
 }
 
 fn handle_hold(state: &mut GameState) {
@@ -69,14 +78,17 @@ fn handle_hold(state: &mut GameState) {
     if let Some(held_kind) = state.hold {
         state.hold = Some(current_kind);
         state.active = spawn_piece(state, held_kind);
+        state.piece_id = state.piece_id.saturating_add(1);
+        state.step_in_piece = 0;
         state.active_moved_since_spawn = false;
+        update_ghost_cache(state);
     } else {
         state.hold = Some(current_kind);
         state.spawn_next();
     }
     state.can_hold = false;
     state.last_action_rotate = false;
-    state.sound_events.push(SoundEvent::Hold);
+    state.push_sound_event(SoundEvent::Hold);
 }
 
 fn handle_pause(state: &mut GameState) {
@@ -99,9 +111,8 @@ pub(super) fn spawn_piece(state: &mut GameState, kind: TetrominoType) -> Tetromi
         .can_place(&piece, piece.x, piece.y, piece.rotation)
     {
         state.game_over = true;
-        state.sound_events.push(SoundEvent::GameOver);
+        state.push_sound_event(SoundEvent::GameOver);
     }
-    update_ghost_cache(state);
     piece
 }
 
@@ -112,6 +123,17 @@ pub(super) fn activate_soft_drop(state: &mut GameState) {
 
 pub(super) fn ghost_blocks(state: &GameState) -> [(i32, i32); 4] {
     state.ghost_cache
+}
+
+pub(super) fn ghost_y(state: &GameState) -> i32 {
+    let mut y = state.active.y;
+    while state
+        .board
+        .can_place(&state.active, state.active.x, y + 1, state.active.rotation)
+    {
+        y += 1;
+    }
+    y
 }
 
 pub(super) fn try_move(state: &mut GameState, dx: i32, dy: i32) -> bool {
@@ -125,7 +147,9 @@ pub(super) fn try_move(state: &mut GameState, dx: i32, dy: i32) -> bool {
         state.active.y = new_y;
         state.active_moved_since_spawn = true;
         update_ghost_cache(state);
-        handle_lock_reset(state);
+        if dx != 0 {
+            handle_lock_reset(state);
+        }
         return true;
     }
     false
@@ -170,7 +194,6 @@ pub(super) fn can_move_down(state: &GameState) -> bool {
 pub(super) fn handle_lock_reset(state: &mut GameState) {
     if can_move_down(state) {
         state.lock_timer_ms = 0;
-        state.lock_reset_count = 0;
         return;
     }
 
@@ -186,11 +209,20 @@ pub(super) fn lock_active_piece(state: &mut GameState) {
     } else {
         TSpinKind::None
     };
+    let score_before_clear = state.score;
     set_landing_flash(state);
     state.board.lock_piece(&state.active);
     let cleared = state.board.clear_lines();
     state.board_revision = state.board_revision.wrapping_add(1);
     state.apply_line_clear(cleared, t_spin);
+    state.push_protocol_event(super::GameEvent {
+        locked: true,
+        lines_cleared: cleared as u8,
+        line_clear_score: state.score.saturating_sub(score_before_clear),
+        t_spin,
+        combo: state.combo,
+        back_to_back: state.back_to_back,
+    });
     state.spawn_next();
     state.last_action_rotate = false;
 }
@@ -204,16 +236,7 @@ pub(super) fn set_landing_flash(state: &mut GameState) {
 }
 
 pub(super) fn update_ghost_cache(state: &mut GameState) {
-    let mut ghost_y = state.active.y;
-    while state.board.can_place(
-        &state.active,
-        state.active.x,
-        ghost_y + 1,
-        state.active.rotation,
-    ) {
-        ghost_y += 1;
-    }
-
+    let ghost_y = ghost_y(state);
     let mut blocks = state.active.blocks(state.active.rotation);
     for (x, y) in blocks.iter_mut() {
         *x += state.active.x;

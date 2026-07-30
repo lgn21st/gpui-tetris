@@ -3,6 +3,8 @@ use gpui_tetris::game::input::{GameAction, RepeatConfig, RepeatState};
 
 use crate::ui::style::CONTROLLER_AXIS_THRESHOLD;
 
+const MAX_REPEAT_ACTIONS_PER_TICK: usize = 32;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AxisDirection {
     Left,
@@ -30,7 +32,6 @@ pub struct InputState {
     controller_left_held: bool,
     controller_right_held: bool,
     controller_down_held: bool,
-    temp_actions: Vec<InputAction>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -85,35 +86,28 @@ impl InputState {
             controller_left_held: false,
             controller_right_held: false,
             controller_down_held: false,
-            temp_actions: Vec::with_capacity(4),
         }
     }
 
     pub fn set_keyboard_left(&mut self, held: bool) -> Vec<InputAction> {
         self.keyboard_left_held = held;
-        let mut temp = std::mem::take(&mut self.temp_actions);
-        temp.clear();
-        self.sync_movement_holds_append(&mut temp);
-        self.temp_actions = temp;
-        std::mem::take(&mut self.temp_actions)
+        let mut actions = Vec::with_capacity(1);
+        self.sync_movement_holds_append(&mut actions);
+        actions
     }
 
     pub fn set_keyboard_right(&mut self, held: bool) -> Vec<InputAction> {
         self.keyboard_right_held = held;
-        let mut temp = std::mem::take(&mut self.temp_actions);
-        temp.clear();
-        self.sync_movement_holds_append(&mut temp);
-        self.temp_actions = temp;
-        std::mem::take(&mut self.temp_actions)
+        let mut actions = Vec::with_capacity(1);
+        self.sync_movement_holds_append(&mut actions);
+        actions
     }
 
     pub fn set_keyboard_down(&mut self, held: bool) -> Vec<InputAction> {
         self.keyboard_down_held = held;
-        let mut temp = std::mem::take(&mut self.temp_actions);
-        temp.clear();
-        self.sync_soft_drop_hold(&mut temp);
-        self.temp_actions = temp;
-        std::mem::take(&mut self.temp_actions)
+        let mut actions = Vec::with_capacity(1);
+        self.sync_soft_drop_hold(&mut actions);
+        actions
     }
 
     pub fn clear_focus_state(&mut self) {
@@ -188,13 +182,19 @@ impl InputState {
         match direction {
             Some(AxisDirection::Left) => {
                 let count = self.left_repeat.tick(elapsed_ms, &self.repeat_config);
-                for _ in 0..count {
+                for _ in 0..usize::try_from(count)
+                    .unwrap_or(usize::MAX)
+                    .min(MAX_REPEAT_ACTIONS_PER_TICK)
+                {
                     out.push(InputAction::recorded(GameAction::MoveLeft));
                 }
             }
             Some(AxisDirection::Right) => {
                 let count = self.right_repeat.tick(elapsed_ms, &self.repeat_config);
-                for _ in 0..count {
+                for _ in 0..usize::try_from(count)
+                    .unwrap_or(usize::MAX)
+                    .min(MAX_REPEAT_ACTIONS_PER_TICK)
+                {
                     out.push(InputAction::recorded(GameAction::MoveRight));
                 }
             }
@@ -205,38 +205,36 @@ impl InputState {
             let count = self
                 .down_repeat
                 .tick(elapsed_ms, &self.soft_drop_repeat_config);
-            for _ in 0..count {
+            let remaining = MAX_REPEAT_ACTIONS_PER_TICK.saturating_sub(out.len());
+            for _ in 0..usize::try_from(count).unwrap_or(usize::MAX).min(remaining) {
                 out.push(InputAction::recorded(GameAction::SoftDrop));
             }
         }
     }
 
     fn handle_controller_button(&mut self, button: Button, pressed: bool) -> Vec<InputAction> {
-        let mut temp = std::mem::take(&mut self.temp_actions);
-        temp.clear();
+        let mut actions = Vec::with_capacity(1);
         match button {
             Button::DPadLeft => self.controller_left_button = pressed,
             Button::DPadRight => self.controller_right_button = pressed,
             Button::DPadDown => self.controller_down_button = pressed,
-            Button::South if pressed => temp.push(InputAction::silent(GameAction::RotateCw)),
-            Button::East if pressed => temp.push(InputAction::silent(GameAction::RotateCcw)),
-            Button::West if pressed => temp.push(InputAction::silent(GameAction::Hold)),
-            Button::North if pressed => temp.push(InputAction::silent(GameAction::HardDrop)),
-            Button::Start if pressed => temp.push(InputAction::silent(GameAction::Pause)),
+            Button::South if pressed => actions.push(InputAction::silent(GameAction::RotateCw)),
+            Button::East if pressed => actions.push(InputAction::silent(GameAction::RotateCcw)),
+            Button::West if pressed => actions.push(InputAction::silent(GameAction::Hold)),
+            Button::North if pressed => actions.push(InputAction::silent(GameAction::HardDrop)),
+            Button::Start if pressed => actions.push(InputAction::silent(GameAction::Pause)),
             Button::Select | Button::Mode if pressed => {
-                temp.push(InputAction::silent(GameAction::Restart))
+                actions.push(InputAction::silent(GameAction::Restart))
             }
             _ => {}
         }
 
-        self.sync_controller_holds_into(&mut temp);
-        self.temp_actions = temp;
-        std::mem::take(&mut self.temp_actions)
+        self.sync_controller_holds_into(&mut actions);
+        actions
     }
 
     fn handle_controller_axis(&mut self, axis: Axis, value: f32) -> Vec<InputAction> {
-        let mut temp = std::mem::take(&mut self.temp_actions);
-        temp.clear();
+        let mut actions = Vec::with_capacity(1);
         match axis {
             Axis::LeftStickX => {
                 self.controller_left_axis = value < -CONTROLLER_AXIS_THRESHOLD;
@@ -248,9 +246,8 @@ impl InputState {
             _ => {}
         }
 
-        self.sync_controller_holds_into(&mut temp);
-        self.temp_actions = temp;
-        std::mem::take(&mut self.temp_actions)
+        self.sync_controller_holds_into(&mut actions);
+        actions
     }
 
     fn sync_movement_holds_append(&mut self, out: &mut Vec<InputAction>) {
@@ -290,19 +287,12 @@ impl InputState {
         let right = self.controller_right_button || self.controller_right_axis;
         let down = self.controller_down_button || self.controller_down_axis;
 
-        if left != self.controller_left_held {
-            self.controller_left_held = left;
-        }
-
-        if right != self.controller_right_held {
-            self.controller_right_held = right;
-        }
+        self.controller_left_held = left;
+        self.controller_right_held = right;
 
         self.sync_movement_holds_append(out);
 
-        if down != self.controller_down_held {
-            self.controller_down_held = down;
-        }
+        self.controller_down_held = down;
 
         self.sync_soft_drop_hold(out);
     }
@@ -317,12 +307,9 @@ impl InputState {
         self.controller_left_held = false;
         self.controller_right_held = false;
         self.controller_down_held = false;
-        let mut temp = std::mem::take(&mut self.temp_actions);
-        temp.clear();
-        self.sync_movement_holds_append(&mut temp);
-        self.sync_soft_drop_hold(&mut temp);
-        temp.clear();
-        self.temp_actions = temp;
+        let mut discarded = Vec::new();
+        self.sync_movement_holds_append(&mut discarded);
+        self.sync_soft_drop_hold(&mut discarded);
     }
 
     fn sync_soft_drop_hold(&mut self, out: &mut Vec<InputAction>) {
@@ -366,5 +353,17 @@ mod tests {
         input.apply_repeats_into(50, true, &mut actions);
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].action, GameAction::MoveLeft);
+    }
+
+    #[test]
+    fn repeat_output_is_bounded_after_a_long_stall() {
+        let mut input = InputState::new();
+        let _ = input.set_keyboard_left(true);
+        let _ = input.set_keyboard_down(true);
+
+        let mut actions = Vec::new();
+        input.apply_repeats_into(u64::MAX, true, &mut actions);
+
+        assert_eq!(actions.len(), super::MAX_REPEAT_ACTIONS_PER_TICK);
     }
 }

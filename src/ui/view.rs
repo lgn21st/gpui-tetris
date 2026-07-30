@@ -9,10 +9,12 @@ use std::time::Instant;
 
 use crate::ui::input::{InputAction, InputState};
 use crate::ui::render::{RenderLayout, render_board, render_panel};
-use crate::ui::style::{BASE_WINDOW_HEIGHT, BASE_WINDOW_WIDTH, MIN_SCALE};
+use crate::ui::style::{MIN_SCALE, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::ui::ui_state::UiState;
 
 mod events;
+
+const MAX_CATCH_UP_STEPS: u64 = 15;
 
 pub struct TetrisView {
     ui: UiState,
@@ -127,6 +129,7 @@ impl TetrisView {
             let elapsed_ms = now.duration_since(prev).as_millis() as u64;
             if elapsed_ms > 0 && self.ui.started && !self.ui.show_settings {
                 let step_ms = self.ui.state.tick_ms.max(1);
+                let elapsed_ms = bounded_elapsed_ms(elapsed_ms, step_ms);
                 self.tick_accumulator_ms = self.tick_accumulator_ms.saturating_add(elapsed_ms);
                 while self.tick_accumulator_ms >= step_ms {
                     self.ui.state.tick(step_ms, false);
@@ -145,16 +148,31 @@ impl TetrisView {
         }
         self.ui.update_active_animation(now);
         if let Some(adapter) = self.adapter.as_mut() {
-            adapter.emit_observation(&self.ui.state);
+            adapter.emit_observation(&mut self.ui.state);
         }
         self.last_tick = Some(now);
     }
+}
+
+fn bounded_elapsed_ms(elapsed_ms: u64, step_ms: u64) -> u64 {
+    elapsed_ms.min(step_ms.saturating_mul(MAX_CATCH_UP_STEPS))
 }
 
 fn compute_scale(window: &Window) -> f32 {
     let viewport = window.viewport_size();
     let width = (viewport.width / px(1.0)).max(1.0);
     let height = (viewport.height / px(1.0)).max(1.0);
-    let scale = (width / BASE_WINDOW_WIDTH).min(height / BASE_WINDOW_HEIGHT);
+    let scale = (width / WINDOW_WIDTH).min(height / WINDOW_HEIGHT);
     scale.clamp(MIN_SCALE, 4.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_CATCH_UP_STEPS, bounded_elapsed_ms};
+
+    #[test]
+    fn frame_delta_is_bounded_to_avoid_unbounded_catch_up() {
+        assert_eq!(bounded_elapsed_ms(u64::MAX, 16), 16 * MAX_CATCH_UP_STEPS);
+        assert_eq!(bounded_elapsed_ms(15, 16), 15);
+    }
 }

@@ -97,3 +97,19 @@ fn line_clear_timer_pauses_gravity() {
     state.tick(180, false);
     assert!(state.active.y >= start_y);
 }
+
+#[test]
+fn line_clear_expiry_consumes_only_remaining_tick_time() {
+    let config = GameConfig {
+        base_drop_ms: 100,
+        ..GameConfig::default()
+    };
+    let mut state = GameState::new(7, config);
+    state.line_clear_timer_ms = 40;
+    let start_y = state.active.y;
+
+    state.tick(100, false);
+
+    assert_eq!(state.active.y, start_y);
+    assert_eq!(state.drop_timer_ms, 60);
+}

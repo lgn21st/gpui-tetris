@@ -4,9 +4,10 @@ use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
 use gpui_tetris::game::state::GameState;
 use std::time::Instant;
 
-use crate::ui::style::{BOARD_COLS_USIZE, BOARD_ROWS_USIZE, DEFAULT_SFX_VOLUME};
+use crate::ui::style::DEFAULT_SFX_VOLUME;
+use gpui_tetris::game::board::{BOARD_HEIGHT, BOARD_WIDTH};
 
-const BOARD_CELLS: usize = BOARD_COLS_USIZE * BOARD_ROWS_USIZE;
+const BOARD_CELLS: usize = BOARD_WIDTH * BOARD_HEIGHT;
 
 pub struct UiState {
     pub last_action: Option<GameAction>,
@@ -354,7 +355,7 @@ impl UiState {
         }
         for (y, row) in self.state.board.cells.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
-                let idx = y * BOARD_COLS_USIZE + x;
+                let idx = y * BOARD_WIDTH + x;
                 self.board_cache[idx] = if cell.filled { cell.kind } else { None };
             }
         }
@@ -476,10 +477,7 @@ impl PreviewCache {
     pub fn mask(&mut self, kind: Option<TetrominoType>) -> &[[bool; PREVIEW_SIZE]; PREVIEW_SIZE] {
         if let Some(kind) = kind {
             let idx = kind as usize;
-            if self.masks[idx].is_none() {
-                self.masks[idx] = Some(build_preview_mask(kind));
-            }
-            return self.masks[idx].as_ref().expect("cached mask");
+            return self.masks[idx].get_or_insert_with(|| build_preview_mask(kind));
         }
 
         static EMPTY: [[bool; PREVIEW_SIZE]; PREVIEW_SIZE] = [[false; PREVIEW_SIZE]; PREVIEW_SIZE];

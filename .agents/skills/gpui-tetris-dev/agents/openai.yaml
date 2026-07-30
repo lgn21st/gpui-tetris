@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPUI Tetris Dev"
+  short_description: "Build, audit, and maintain the GPUI Tetris app"
+  default_prompt: "Use $gpui-tetris-dev to implement and verify a change in this Tetris repository."

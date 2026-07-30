@@ -3,9 +3,7 @@ use gpui::{
     WindowBounds, WindowOptions, actions, prelude::*, px, size,
 };
 
-use crate::ui::style::{
-    BASE_WINDOW_HEIGHT, BASE_WINDOW_WIDTH, MIN_SCALE, WINDOW_HEIGHT, WINDOW_WIDTH,
-};
+use crate::ui::style::{MIN_SCALE, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::ui::view::TetrisView;
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
@@ -36,8 +34,8 @@ pub fn run() {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             is_resizable: true,
             window_min_size: Some(size(
-                px(BASE_WINDOW_WIDTH * MIN_SCALE),
-                px(BASE_WINDOW_HEIGHT * MIN_SCALE),
+                px(WINDOW_WIDTH * MIN_SCALE),
+                px(WINDOW_HEIGHT * MIN_SCALE),
             )),
             ..Default::default()
         };
@@ -74,12 +72,17 @@ pub fn run() {
             },
         ]);
 
-        let window = cx
-            .open_window(options, move |_, cx| {
-                let audio = audio_engine.clone();
-                cx.new(|cx| TetrisView::new(cx, audio))
-            })
-            .unwrap();
+        let window = match cx.open_window(options, move |_, cx| {
+            let audio = audio_engine.clone();
+            cx.new(|cx| TetrisView::new(cx, audio))
+        }) {
+            Ok(window) => window,
+            Err(err) => {
+                eprintln!("failed to open game window: {err}");
+                cx.quit();
+                return;
+            }
+        };
         let window_handle = window;
 
         cx.on_action({
@@ -98,7 +101,14 @@ pub fn run() {
             KeyBinding::new("cmd-ctrl-f", ToggleFullscreen, None),
             KeyBinding::new("ctrl-cmd-f", ToggleFullscreen, None),
         ]);
-        let view = window.update(cx, |_, _, cx| cx.entity()).unwrap();
+        let view = match window.update(cx, |_, _, cx| cx.entity()) {
+            Ok(view) => view,
+            Err(err) => {
+                eprintln!("failed to initialize game view: {err}");
+                cx.quit();
+                return;
+            }
+        };
 
         register_action::<MoveLeft>(cx, view.clone(), GameAction::MoveLeft);
         register_action::<MoveRight>(cx, view.clone(), GameAction::MoveRight);
@@ -110,11 +120,11 @@ pub fn run() {
         register_action::<Pause>(cx, view.clone(), GameAction::Pause);
         register_action::<Restart>(cx, view, GameAction::Restart);
 
-        window
-            .update(cx, |view, window, _| {
-                window.focus(view.focus_handle());
-            })
-            .unwrap();
+        if let Err(err) = window.update(cx, |view, window, _| {
+            window.focus(view.focus_handle());
+        }) {
+            eprintln!("failed to focus game window: {err}");
+        }
         cx.activate(true);
     })
 }

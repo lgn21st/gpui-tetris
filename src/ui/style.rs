@@ -5,15 +5,6 @@ use gpui_tetris::game::pieces::TetrominoType;
 pub const WINDOW_WIDTH: f32 = 480.0;
 pub const WINDOW_HEIGHT: f32 = 720.0;
 pub const CELL_SIZE: f32 = 24.0;
-
-pub const BASE_WINDOW_WIDTH: f32 = WINDOW_WIDTH;
-pub const BASE_WINDOW_HEIGHT: f32 = WINDOW_HEIGHT;
-pub const BASE_CELL_SIZE: f32 = CELL_SIZE;
-
-pub const BOARD_COLS: f32 = 10.0;
-pub const BOARD_ROWS: f32 = 20.0;
-pub const BOARD_COLS_USIZE: usize = 10;
-pub const BOARD_ROWS_USIZE: usize = 20;
 pub const BASE_PADDING: f32 = 16.0;
 pub const BASE_GAP: f32 = 16.0;
 pub const DEFAULT_SFX_VOLUME: f32 = 0.7;

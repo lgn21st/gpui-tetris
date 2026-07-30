@@ -71,3 +71,13 @@ pub enum TSpinKind {
     Mini,
     Full,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GameEvent {
+    pub locked: bool,
+    pub lines_cleared: u8,
+    pub line_clear_score: u32,
+    pub t_spin: TSpinKind,
+    pub combo: i32,
+    pub back_to_back: bool,
+}

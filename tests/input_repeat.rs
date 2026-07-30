@@ -29,3 +29,11 @@ fn repeat_fires_multiple_steps_after_das() {
     assert_eq!(state.tick(200, &config), 2);
     assert_eq!(state.tick(100, &config), 2);
 }
+
+#[test]
+fn repeat_count_saturates_for_extreme_elapsed_time() {
+    let mut repeat = RepeatState::new();
+    assert!(repeat.press());
+
+    assert_eq!(repeat.tick(u64::MAX, &RepeatConfig::default()), u32::MAX);
+}

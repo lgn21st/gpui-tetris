@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Toolchain
+        run: rustup show active-toolchain
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Test
+        run: cargo test --all-targets --locked --features gpui/runtime_shaders
+      - name: Clippy
+        run: cargo clippy --all-targets --locked --features gpui/runtime_shaders -- -D warnings
+      - name: Documentation
+        run: cargo test --doc --locked --features gpui/runtime_shaders

@@ -3,22 +3,25 @@ use crate::game::input::GameAction;
 use crate::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
 
 mod actions;
-mod kicks;
+pub(crate) mod kicks;
 mod rng;
 mod scoring;
 mod timing;
 mod types;
 
 use actions::{
-    activate_soft_drop, apply_action, can_move_down, ghost_blocks, lock_active_piece, try_move,
+    activate_soft_drop, apply_action, can_move_down, ghost_blocks, ghost_y, lock_active_piece,
+    try_move,
 };
 use rng::{SimpleRng, ensure_queue};
 use scoring::apply_line_clear;
 use timing::{drop_interval_ms, tick};
-pub use types::{GameConfig, RulesConfig, Ruleset, SoundEvent, TSpinKind};
+pub use types::{GameConfig, GameEvent, RulesConfig, Ruleset, SoundEvent, TSpinKind};
 
-const NEXT_QUEUE_PREVIEW_SIZE: usize = 3;
-const SPAWN_QUEUE_MIN: usize = 4;
+const NEXT_QUEUE_PREVIEW_SIZE: usize = 5;
+const SPAWN_QUEUE_MIN: usize = 6;
+const MAX_PROTOCOL_EVENTS: usize = 4;
+const MAX_SOUND_EVENTS: usize = 256;
 
 #[derive(Clone, Debug)]
 pub struct GameState {
@@ -53,7 +56,13 @@ pub struct GameState {
     pub ghost_cache: [(i32, i32); 4],
     pub active_moved_since_spawn: bool,
     pub board_revision: u64,
+    pub seed: u64,
+    pub episode_id: u64,
+    pub piece_id: u64,
+    pub step_in_piece: u64,
+    pub logical_step: u64,
     sound_events: Vec<SoundEvent>,
+    protocol_events: Vec<GameEvent>,
     last_action_rotate: bool,
     rng: SimpleRng,
 }
@@ -96,7 +105,13 @@ impl GameState {
             ghost_cache: [(0, 0); 4],
             active_moved_since_spawn: false,
             board_revision: 1,
+            seed,
+            episode_id: 0,
+            piece_id: 0,
+            step_in_piece: 0,
+            logical_step: 0,
             sound_events: Vec::new(),
+            protocol_events: Vec::with_capacity(MAX_PROTOCOL_EVENTS),
             last_action_rotate: false,
             rng,
         };
@@ -115,6 +130,8 @@ impl GameState {
         self.lock_reset_count = 0;
         self.last_action_rotate = false;
         self.active_moved_since_spawn = false;
+        self.piece_id = self.piece_id.saturating_add(1);
+        self.step_in_piece = 0;
         actions::update_ghost_cache(self);
 
         if !self.board.can_place(
@@ -124,7 +141,7 @@ impl GameState {
             self.active.rotation,
         ) {
             self.game_over = true;
-            self.sound_events.push(SoundEvent::GameOver);
+            self.push_sound_event(SoundEvent::GameOver);
         }
     }
 
@@ -152,6 +169,23 @@ impl GameState {
         std::mem::take(&mut self.sound_events)
     }
 
+    pub(crate) fn push_sound_event(&mut self, event: SoundEvent) {
+        push_bounded(&mut self.sound_events, event, MAX_SOUND_EVENTS);
+    }
+
+    pub fn take_protocol_events(&mut self) -> Vec<GameEvent> {
+        std::mem::take(&mut self.protocol_events)
+    }
+
+    pub(crate) fn push_protocol_event(&mut self, event: GameEvent) {
+        push_bounded(&mut self.protocol_events, event, MAX_PROTOCOL_EVENTS);
+    }
+
+    pub(crate) fn advance_logical_step(&mut self) {
+        self.logical_step = self.logical_step.saturating_add(1);
+        self.step_in_piece = self.step_in_piece.saturating_add(1);
+    }
+
     pub fn is_line_clear_active(&self) -> bool {
         self.line_clear_timer_ms > 0
     }
@@ -172,7 +206,7 @@ impl GameState {
         if self.lock_delay_ms == 0 {
             return false;
         }
-        self.is_grounded() && self.lock_timer_ms >= (self.lock_delay_ms * 3 / 5)
+        self.is_grounded() && self.lock_timer_ms >= self.lock_delay_ms.saturating_mul(3) / 5
     }
 
     pub fn lock_warning_intensity(&self) -> f32 {
@@ -192,7 +226,18 @@ impl GameState {
 
     pub fn reset(&mut self) {
         let seed = self.rng.next_u32() as u64;
-        *self = GameState::new(seed, self.current_config());
+        self.reset_with_seed(seed);
+    }
+
+    pub fn reset_with_seed(&mut self, seed: u64) {
+        let next_episode = self.episode_id.saturating_add(1);
+        let next_step = self.logical_step.saturating_add(1);
+        let next_board_revision = self.board_revision.wrapping_add(1);
+        let mut next = GameState::new(seed, self.current_config());
+        next.episode_id = next_episode;
+        next.logical_step = next_step;
+        next.board_revision = next_board_revision;
+        *self = next;
     }
 
     pub fn board_revision(&self) -> u64 {
@@ -224,6 +269,10 @@ impl GameState {
         ghost_blocks(self)
     }
 
+    pub fn ghost_y(&self) -> i32 {
+        ghost_y(self)
+    }
+
     fn try_move(&mut self, dx: i32, dy: i32) -> bool {
         try_move(self, dx, dy)
     }
@@ -235,6 +284,13 @@ impl GameState {
     fn lock_active_piece(&mut self) {
         lock_active_piece(self);
     }
+}
+
+fn push_bounded<T>(items: &mut Vec<T>, item: T, capacity: usize) {
+    if items.len() >= capacity {
+        items.remove(0);
+    }
+    items.push(item);
 }
 
 fn init_next_queue(rng: &mut SimpleRng) -> Vec<TetrominoType> {

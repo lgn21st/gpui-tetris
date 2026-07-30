@@ -1,7 +1,7 @@
 use gpui_tetris::game::board::BOARD_HEIGHT;
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState, TSpinKind};
+use gpui_tetris::game::state::{GameConfig, GameState, RulesConfig, Ruleset, TSpinKind};
 
 #[test]
 fn soft_drop_awards_point_per_cell() {
@@ -60,4 +60,47 @@ fn move_resets_lock_timer_when_grounded() {
     state.apply_action(GameAction::MoveLeft);
 
     assert_eq!(state.lock_timer_ms, 0);
+}
+
+#[test]
+fn scoring_saturates_instead_of_overflowing() {
+    let rules = RulesConfig {
+        classic_line_scores: [u32::MAX; 4],
+        ..RulesConfig::default()
+    };
+    let mut state = GameState::new(
+        8,
+        GameConfig {
+            rules,
+            ..GameConfig::default()
+        },
+    );
+    state.score = u32::MAX - 1;
+    state.level = u32::MAX;
+
+    state.apply_line_clear(1, TSpinKind::None);
+
+    assert_eq!(state.score, u32::MAX);
+    assert_eq!(state.lines, 1);
+}
+
+#[test]
+fn zero_b2b_denominator_is_handled_without_panicking() {
+    let rules = RulesConfig {
+        b2b_bonus_den: 0,
+        ..RulesConfig::default()
+    };
+    let mut state = GameState::new(
+        9,
+        GameConfig {
+            ruleset: Ruleset::Modern,
+            rules,
+            ..GameConfig::default()
+        },
+    );
+    state.back_to_back = true;
+
+    state.apply_line_clear(4, TSpinKind::None);
+
+    assert!(state.score > 0);
 }
