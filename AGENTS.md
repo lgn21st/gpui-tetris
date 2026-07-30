@@ -1,6 +1,7 @@
 # Repository Guidelines
 
-Build a desktop Tetris in Rust 1.97.1+ (2024 edition) with GPUI 0.2.2.
+Build a desktop Tetris in Rust with GPUI. Toolchain and dependency versions
+live only in `rust-toolchain.toml`, `Cargo.toml`, and `Cargo.lock`.
 
 ## Ownership
 

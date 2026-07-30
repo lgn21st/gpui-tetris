@@ -1,6 +1,6 @@
 # Audio Assets
 
-The WAV files in `assets/sfx/` derive from Kenney “Interface Sounds” v1.0
+The WAV files in `assets/sfx/` derive from Kenney “Interface Sounds”
 (CC0); see `kenney_interface_sounds_LICENSE.txt`. The OGG sources were
 converted to 44.1 kHz stereo PCM.
 

@@ -19,8 +19,8 @@ Start pauses, and Select/Back restarts.
 
 ## Development
 
-The repository selects Rust stable with rustfmt and Clippy; the package MSRV is
-1.97.1.
+The repository selects its Rust toolchain in `rust-toolchain.toml` and keeps
+dependency requirements in `Cargo.toml`.
 
 ```bash
 cargo run
@@ -34,8 +34,8 @@ maintained contracts. Contributor workflow and verification commands are in
 
 ## AI Adapter
 
-The server implements Tetris AI Adapter Protocol 3.0.0 over JSON Lines TCP.
-The normative protocol is
+The server implements the current Tetris AI Adapter Protocol over JSON Lines
+TCP. The normative protocol and its version are
 `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter`; conformance evidence
 is in `docs/adapter_acceptance.md`, while queueing, scheduling, logging, startup,
 and security choices are in `docs/adapter-implementation-profile.md`.

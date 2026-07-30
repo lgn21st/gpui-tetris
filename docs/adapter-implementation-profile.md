@@ -1,7 +1,7 @@
 # Adapter Implementation Profile
 
-Project-owned choices for Tetris AI Adapter Protocol 3.0.0. The normative
-package is `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter`.
+Project-owned choices for the protocol whose normative package and version are
+in `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter`.
 
 ## Runtime and bounds
 
