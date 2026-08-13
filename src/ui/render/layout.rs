@@ -2,8 +2,8 @@ use gpui::{FontWeight, IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::render::{
-    render_active_piece, render_cell, render_game_over_tint, render_line_clear_flash,
-    render_lock_bar, render_preview,
+    render_active_piece, render_board_grid, render_cell, render_frame, render_game_over_tint,
+    render_line_clear_flash, render_lock_bar, render_preview,
 };
 use crate::ui::style::{
     BASE_GAP, BASE_PANEL_SECTION_TEXT, BASE_PANEL_TEXT, CELL_SIZE, CONTENT_WIDTH,
@@ -20,7 +20,9 @@ pub struct RenderLayout {
     pub board_width: f32,
     pub board_height: f32,
     pub panel_width: f32,
+    pub panel_content_width: f32,
     pub content_width: f32,
+    pub stroke_width: f32,
 }
 
 impl RenderLayout {
@@ -38,6 +40,7 @@ impl RenderLayout {
         let board_width = crate::ui::style::BOARD_WIDTH * scale;
         let board_height = crate::ui::style::BOARD_HEIGHT * scale;
         let panel_width = PANEL_WIDTH * scale;
+        let panel_content_width = (PANEL_WIDTH - 2.0 * PANEL_PADDING) * scale;
         Self {
             scale,
             cell_size,
@@ -45,7 +48,9 @@ impl RenderLayout {
             board_width,
             board_height,
             panel_width,
+            panel_content_width,
             content_width: CONTENT_WIDTH * scale,
+            stroke_width: scale,
         }
     }
 }
@@ -96,7 +101,13 @@ pub fn render_board(
                 is_ghost = true;
             }
 
-            row = row.child(render_cell(cell_kind, is_ghost, is_flash, layout.cell_size));
+            row = row.child(render_cell(
+                cell_kind,
+                is_ghost,
+                is_flash,
+                layout.cell_size,
+                layout.stroke_width,
+            ));
         }
         rows.push(row);
     }
@@ -105,13 +116,19 @@ pub fn render_board(
         .w(px(layout.board_width))
         .h(px(layout.board_height))
         .bg(theme::board_bg())
-        .border(px(1.0))
-        .border_color(theme::border())
         .relative()
+        .overflow_hidden()
+        .child(render_board_grid(
+            BOARD_WIDTH,
+            BOARD_HEIGHT,
+            layout.cell_size,
+            layout.stroke_width,
+        ))
         .child(div().flex().flex_col().children(rows))
         .child(render_active_overlay(ui, layout, show_active, now))
         .child(render_line_clear_flash(ui.state.line_clear_timer_ms > 0))
         .child(render_game_over_tint(ui.state.game_over))
+        .child(render_frame(layout.stroke_width))
 }
 
 fn render_active_overlay(
@@ -138,7 +155,13 @@ fn render_active_overlay(
         let to_piece = gpui_tetris::game::pieces::Tetromino::new(anim.kind, 0, 0);
         let to_blocks = to_piece.blocks(anim.to_rotation);
         layer = layer.child(render_active_piece(
-            anim.kind, &to_blocks, offset_x, offset_y, cell_size, 1.0,
+            anim.kind,
+            &to_blocks,
+            offset_x,
+            offset_y,
+            cell_size,
+            layout.stroke_width,
+            1.0,
         ));
 
         if anim.rotation_changed && anim.from_rotation != anim.to_rotation {
@@ -152,6 +175,7 @@ fn render_active_overlay(
                 from_offset_x,
                 from_offset_y,
                 cell_size,
+                layout.stroke_width,
                 (1.0 - progress).clamp(0.0, 1.0),
             ));
         }
@@ -166,6 +190,7 @@ fn render_active_overlay(
             offset_x,
             offset_y,
             cell_size,
+            layout.stroke_width,
             1.0,
         ));
     }
@@ -192,9 +217,8 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
         .w(px(layout.panel_width))
         .h(px(layout.board_height))
         .bg(theme::panel_bg())
-        .border(px(1.0))
-        .border_color(theme::border())
         .p(px(PANEL_PADDING * layout.scale))
+        .relative()
         .flex()
         .flex_col()
         .gap(px(section_gap))
@@ -218,6 +242,7 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
             ui.state.lock_timer_ms,
             ui.state.lock_delay_ms,
             ui.state.is_grounded(),
+            layout.panel_content_width,
             layout.scale,
         ))
         .child(divider())
@@ -274,6 +299,7 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
                         )),
                 ),
         )
+        .child(render_frame(layout.stroke_width))
 }
 
 #[cfg(test)]
@@ -298,6 +324,9 @@ mod tests {
         assert_eq!(layout.board_width, BOARD_WIDTH);
         assert_eq!(layout.board_height, BOARD_HEIGHT);
         assert_eq!(layout.panel_width, PANEL_WIDTH);
+        assert_eq!(layout.panel_content_width, 168.0);
+        assert_eq!(layout.content_width, BOARD_WIDTH + BASE_GAP + PANEL_WIDTH);
+        assert_eq!(layout.stroke_width, 1.0);
     }
 
     #[test]

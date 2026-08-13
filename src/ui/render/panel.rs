@@ -1,18 +1,16 @@
 use gpui::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
-use crate::ui::style::{PANEL_PADDING, PANEL_WIDTH};
-
 pub fn render_lock_bar(
     lock_timer_ms: u64,
     lock_delay_ms: u64,
     grounded: bool,
+    bar_width: f32,
     scale: f32,
 ) -> impl IntoElement {
     const BAR_HEIGHT: f32 = 6.0;
 
     let active = grounded && lock_delay_ms > 0;
-    let bar_width = (PANEL_WIDTH - 2.0 * PANEL_PADDING) * scale;
     let bar_height = BAR_HEIGHT * scale;
     let ratio = if active {
         (lock_timer_ms as f32 / lock_delay_ms as f32).clamp(0.0, 1.0)

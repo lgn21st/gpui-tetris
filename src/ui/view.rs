@@ -131,8 +131,6 @@ impl Render for TetrisView {
                 linear_color_stop(theme::group_start(), 0.0),
                 linear_color_stop(theme::group_end(), 1.0),
             ))
-            .border(px(1.0))
-            .border_color(theme::border())
             .shadow_lg()
             .child(div().flex().gap(px(layout.gap)).child(board).child(panel));
 
