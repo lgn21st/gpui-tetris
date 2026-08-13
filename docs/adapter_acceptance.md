@@ -1,7 +1,8 @@
 # Adapter Protocol Conformance
 
-Authority: `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter`. Its
-`VERSION`, changelog, specification, schema, and TCP profile are the only
+Authority: the
+[`lgn21st/tui-tetris` Adapter package](https://github.com/lgn21st/tui-tetris/tree/main/protocol/adapter).
+Its `VERSION`, changelog, specification, schema, and TCP profile are the only
 normative sources; this file records implementation coverage without copying
 them.
 

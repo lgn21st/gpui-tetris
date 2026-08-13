@@ -32,13 +32,15 @@ will drift.
 
 ## Adapter authority
 
-Before Adapter work, read in order:
+Use the
+[`lgn21st/tui-tetris` Adapter package](https://github.com/lgn21st/tui-tetris/tree/main/protocol/adapter)
+as the authority. Before Adapter work, read in order:
 
-1. `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter/VERSION`
-2. `CHANGELOG.md`
-3. `SPEC.md`
-4. `schema.json`
-5. `profiles/tcp-json-lines.md`
+1. [`VERSION`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/VERSION)
+2. [`CHANGELOG.md`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/CHANGELOG.md)
+3. [`SPEC.md`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/SPEC.md)
+4. [`schema.json`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/schema.json)
+5. [`profiles/tcp-json-lines.md`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/profiles/tcp-json-lines.md)
 
 Use TDD for migrations. Keep the compact requirement/implementation/difference/
 evidence matrix in `docs/adapter_acceptance.md`. Keep queueing, threading,

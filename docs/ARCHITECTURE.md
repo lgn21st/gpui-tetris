@@ -33,7 +33,8 @@ startup policy are in `adapter-implementation-profile.md`.
 
 `GameState` owns gameplay, timers, RNG, protocol identities, and events. Tick
 order is defined in `rules-spec.md`; long frame stalls are truncated at the UI
-boundary. Focus loss, menus, and device state remain UI concerns.
+boundary. Focus loss clears held UI input, while menus and device state remain
+UI concerns.
 
 ## Change ownership
 

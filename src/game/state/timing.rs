@@ -23,8 +23,7 @@ pub(super) fn tick(state: &mut GameState, elapsed_ms: u64, soft_drop: bool) {
     state.advance_logical_step();
 
     step_landing_flash(state, elapsed_ms);
-    let elapsed_ms = step_line_clear_pause(state, elapsed_ms);
-    if elapsed_ms == 0 {
+    if step_line_clear_pause(state, elapsed_ms) {
         return;
     }
     update_drop_timers(state, elapsed_ms);
@@ -38,10 +37,13 @@ fn step_landing_flash(state: &mut GameState, elapsed_ms: u64) {
     }
 }
 
-fn step_line_clear_pause(state: &mut GameState, elapsed_ms: u64) -> u64 {
-    let paused_ms = state.line_clear_timer_ms.min(elapsed_ms);
-    state.line_clear_timer_ms -= paused_ms;
-    elapsed_ms - paused_ms
+fn step_line_clear_pause(state: &mut GameState, elapsed_ms: u64) -> bool {
+    if state.line_clear_timer_ms == 0 {
+        return false;
+    }
+
+    state.line_clear_timer_ms = state.line_clear_timer_ms.saturating_sub(elapsed_ms);
+    state.line_clear_timer_ms > 0
 }
 
 fn update_drop_timers(state: &mut GameState, elapsed_ms: u64) {
@@ -68,6 +70,7 @@ fn apply_gravity_steps(state: &mut GameState, soft_drop: bool) {
 fn update_lock_timer(state: &mut GameState, elapsed_ms: u64) {
     if state.can_move_down() {
         state.lock_timer_ms = 0;
+        state.lock_reset_count = 0;
     } else {
         state.lock_timer_ms = state.lock_timer_ms.saturating_add(elapsed_ms);
         if state.lock_timer_ms >= state.lock_delay_ms {

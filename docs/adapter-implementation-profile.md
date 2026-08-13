@@ -1,7 +1,8 @@
 # Adapter Implementation Profile
 
 Project-owned choices for the protocol whose normative package and version are
-in `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter`.
+in the
+[`lgn21st/tui-tetris` Adapter package](https://github.com/lgn21st/tui-tetris/tree/main/protocol/adapter).
 
 ## Runtime and bounds
 
@@ -32,7 +33,8 @@ in `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter`.
 
 - Enabled by default on `127.0.0.1:7777`; configure with `TETRIS_AI_HOST` and
   `TETRIS_AI_PORT`, or disable with `TETRIS_AI_DISABLED=1`/`true`.
-- Adapter mode starts gameplay immediately and disables focus-loss auto-pause.
+- Adapter mode starts gameplay immediately. Focus loss never changes core pause
+  state; it only clears held local input.
 - `TETRIS_AI_LOG_PATH=auto` appends JSON Lines to
   `/tmp/tetris-ai-adapter-<unix-ms>.jsonl`; empty disables logging. Logging is
   synchronous and non-fatal.

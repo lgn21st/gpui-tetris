@@ -194,6 +194,7 @@ pub(super) fn can_move_down(state: &GameState) -> bool {
 pub(super) fn handle_lock_reset(state: &mut GameState) {
     if can_move_down(state) {
         state.lock_timer_ms = 0;
+        state.lock_reset_count = 0;
         return;
     }
 

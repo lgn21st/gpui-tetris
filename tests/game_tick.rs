@@ -99,7 +99,7 @@ fn line_clear_timer_pauses_gravity() {
 }
 
 #[test]
-fn line_clear_expiry_consumes_only_remaining_tick_time() {
+fn line_clear_expiry_resumes_with_the_current_fixed_step() {
     let config = GameConfig {
         base_drop_ms: 100,
         ..GameConfig::default()
@@ -110,6 +110,6 @@ fn line_clear_expiry_consumes_only_remaining_tick_time() {
 
     state.tick(100, false);
 
-    assert_eq!(state.active.y, start_y);
-    assert_eq!(state.drop_timer_ms, 60);
+    assert_eq!(state.active.y, start_y + 1);
+    assert_eq!(state.drop_timer_ms, 0);
 }

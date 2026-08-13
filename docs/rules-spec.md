@@ -23,16 +23,17 @@ offsets live in `src/game/pieces.rs`.
 - Actions apply only at valid positions. Soft drop awards one point per cell;
   hard drop awards two and locks immediately.
 - Successful grounded movement or rotation resets lock delay up to its limit.
-  Becoming airborne clears the timer, not the consumed-reset count.
+  Becoming airborne clears both the timer and consumed-reset count, restoring
+  the reset budget for the next grounded phase.
 - Failed actions emit no success sound. Pause and game-over restrict accepted
   actions to their lifecycle controls. Restart resets from the selected seed
   and advances protocol identities.
 
 ## Timing
 
-Each tick decreases landing flash, consumes clear pause, updates soft-drop
-grace, applies at most one gravity move, then advances grounded lock delay.
-Only time left after a clear pause reaches gravity.
+Each tick decreases landing flash and consumes clear pause. If the pause
+expires, the full current fixed step resumes soft-drop grace, all gravity moves
+covered by the accumulated interval, and grounded lock delay.
 
 Level gravity intervals are `1000, 800, 650, 500, 400, 320, 250, 200, 160`,
 then 120 ms, clamped by the configured base and floor.
@@ -41,8 +42,9 @@ then 120 ms, clamped by the configured base and floor.
 
 Classic clears award `40/100/300/1200 × (level + 1)`; level is `lines / 10`.
 Modern mode adds configured T-spin, combo, and B2B scoring. Difficult clears
-continue B2B, ordinary clears break it, and no-line placements reset combo but
-preserve B2B. Arithmetic saturates and custom denominators are never zero.
+continue B2B; ordinary clears and no-line placements break it. Base and B2B
+points receive the level multiplier before the unscaled combo bonus is added.
+Arithmetic saturates and custom denominators are never zero.
 
 A T-spin requires a T piece, a successful last rotation, and three occupied
 pivot corners. Both front corners make it Full; otherwise it is Mini.
@@ -50,5 +52,5 @@ pivot corners. Both front corners make it Full; otherwise it is Mini.
 ## UI effects
 
 Clear pause hides active and ghost pieces. Ghost guidance also hides while
-grounded or before the piece first moves. Focus loss pauses a started local game
-unless Adapter mode is active; landing flash shows the last locked cells.
+grounded or before the piece first moves. Focus loss clears held device input
+without changing pause state; landing flash shows the last locked cells.

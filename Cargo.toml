@@ -19,6 +19,6 @@ semver = "1.0.28"
 
 [package.metadata.bundle]
 name = "gpui-tetris"
-identifier = "com.lyuguoning.com.gpui-tetris"
+identifier = "com.lyuguoning.gpui-tetris"
 icon = ["assets/icon.icns"]
 resources = ["assets/sfx"]

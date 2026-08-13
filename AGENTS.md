@@ -45,13 +45,15 @@ outside the source tree, and verify icon, bundled SFX, input, and resizing.
 
 ## Adapter protocol
 
-Before Adapter work, read the authority in this order:
+The authority is the
+[`lgn21st/tui-tetris` Adapter package](https://github.com/lgn21st/tui-tetris/tree/main/protocol/adapter).
+Before Adapter work, read it in this order:
 
-1. `/Users/daniel/workspace/learn/tui-tetris/protocol/adapter/VERSION`
-2. `CHANGELOG.md`
-3. `SPEC.md`
-4. `schema.json`
-5. `profiles/tcp-json-lines.md`
+1. [`VERSION`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/VERSION)
+2. [`CHANGELOG.md`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/CHANGELOG.md)
+3. [`SPEC.md`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/SPEC.md)
+4. [`schema.json`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/schema.json)
+5. [`profiles/tcp-json-lines.md`](https://github.com/lgn21st/tui-tetris/blob/main/protocol/adapter/profiles/tcp-json-lines.md)
 
 Maintain `docs/adapter_acceptance.md` as the requirement-to-test matrix and
 keep project-specific runtime choices in

@@ -1,40 +1,51 @@
-use gpui::{IntoElement, div, prelude::*, px};
+use gpui::{FontWeight, IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::render::{
-    OverlayState, render_active_piece, render_cell, render_game_over_tint, render_line_clear_flash,
-    render_lock_bar, render_lock_warning, render_overlay, render_preview, render_preview_compact,
+    render_active_piece, render_cell, render_game_over_tint, render_line_clear_flash,
+    render_lock_bar, render_preview,
 };
-use crate::ui::style::{BASE_GAP, BASE_PADDING, BASE_PANEL_TEXT, CELL_SIZE, WINDOW_WIDTH};
+use crate::ui::style::{
+    BASE_GAP, BASE_PANEL_SECTION_TEXT, BASE_PANEL_TEXT, CELL_SIZE, CONTENT_WIDTH,
+    NEXT_PREVIEW_CELL, PANEL_DIVIDER_HEIGHT, PANEL_DIVIDER_PADDING, PANEL_ITEM_SPACING,
+    PANEL_PADDING, PANEL_SECTION_SPACING, PANEL_WIDTH, PREVIEW_CELL,
+};
 use crate::ui::ui_state::UiState;
 use gpui_tetris::game::board::{BOARD_HEIGHT, BOARD_WIDTH};
 
 pub struct RenderLayout {
     pub scale: f32,
     pub cell_size: f32,
-    pub padding: f32,
     pub gap: f32,
     pub board_width: f32,
     pub board_height: f32,
     pub panel_width: f32,
+    pub content_width: f32,
 }
 
 impl RenderLayout {
     pub fn new(scale: f32) -> Self {
         let cell_size = CELL_SIZE * scale;
-        let padding = BASE_PADDING * scale;
         let gap = BASE_GAP * scale;
-        let board_width = cell_size * BOARD_WIDTH as f32;
-        let board_height = cell_size * BOARD_HEIGHT as f32;
-        let panel_width = (WINDOW_WIDTH * scale) - board_width - (padding * 2.0) - gap;
+        debug_assert_eq!(
+            CELL_SIZE * BOARD_WIDTH as f32,
+            crate::ui::style::BOARD_WIDTH
+        );
+        debug_assert_eq!(
+            CELL_SIZE * BOARD_HEIGHT as f32,
+            crate::ui::style::BOARD_HEIGHT
+        );
+        let board_width = crate::ui::style::BOARD_WIDTH * scale;
+        let board_height = crate::ui::style::BOARD_HEIGHT * scale;
+        let panel_width = PANEL_WIDTH * scale;
         Self {
             scale,
             cell_size,
-            padding,
             gap,
             board_width,
             board_height,
             panel_width,
+            content_width: CONTENT_WIDTH * scale,
         }
     }
 }
@@ -42,7 +53,6 @@ impl RenderLayout {
 pub fn render_board(
     ui: &mut UiState,
     layout: &RenderLayout,
-    focused: bool,
     now: std::time::Instant,
 ) -> impl IntoElement + use<> {
     ui.sync_board_cache();
@@ -101,20 +111,7 @@ pub fn render_board(
         .child(div().flex().flex_col().children(rows))
         .child(render_active_overlay(ui, layout, show_active, now))
         .child(render_line_clear_flash(ui.state.line_clear_timer_ms > 0))
-        .child(render_lock_warning(if ui.state.is_grounded() {
-            ui.state.lock_warning_intensity()
-        } else {
-            0.0
-        }))
         .child(render_game_over_tint(ui.state.game_over))
-        .child(render_overlay(&OverlayState {
-            started: ui.started,
-            show_settings: ui.show_settings,
-            paused: ui.state.paused,
-            game_over: ui.state.game_over,
-            focused,
-            scale: layout.scale,
-        }))
 }
 
 fn render_active_overlay(
@@ -180,99 +177,133 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
     let next_1 = ui.state.next_queue.first().copied();
     let next_2 = ui.state.next_queue.get(1).copied();
     let next_3 = ui.state.next_queue.get(2).copied();
-    let next_gap = layout.gap * 0.35;
-    let panel_width = layout.panel_width.max(layout.cell_size * 4.0);
-    let panel_inner_width = (panel_width - layout.padding * 1.5).max(1.0);
-    // render_preview uses a 4x4 grid where each cell is 0.6 * input size.
-    let preview_width_factor = 4.0 * 0.6;
-    let fit_size = (panel_inner_width - next_gap * 2.0) / (3.0 * preview_width_factor);
-    let next_preview_cell = fit_size.clamp(layout.cell_size * 0.45, layout.cell_size * 1.05);
+    let next_gap = PANEL_ITEM_SPACING * layout.scale;
+    let section_gap = PANEL_SECTION_SPACING * layout.scale;
+    let item_gap = PANEL_ITEM_SPACING * layout.scale;
+    let divider = || {
+        div()
+            .w_full()
+            .h(px(PANEL_DIVIDER_HEIGHT * layout.scale))
+            .my(px(PANEL_DIVIDER_PADDING * layout.scale))
+            .bg(theme::divider())
+    };
 
     div()
-        .w(px(layout.panel_width.max(layout.cell_size * 4.0)))
+        .w(px(layout.panel_width))
         .h(px(layout.board_height))
         .bg(theme::panel_bg())
         .border(px(1.0))
         .border_color(theme::border())
-        .p(px(layout.padding * 0.75))
+        .p(px(PANEL_PADDING * layout.scale))
         .flex()
         .flex_col()
-        .gap(px(layout.gap * 0.6))
+        .gap(px(section_gap))
         .text_size(px(BASE_PANEL_TEXT * layout.scale))
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme::panel_text())
-        .child(
-            div()
-                .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
-                .child(ui.panel_labels.last_input.clone()),
-        )
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap(px(layout.gap * 0.2))
+                .gap(px(item_gap))
                 .child(ui.panel_labels.score.clone())
                 .child(ui.panel_labels.level.clone())
                 .child(ui.panel_labels.lines.clone())
                 .child(ui.panel_labels.status.clone())
                 .child(ui.panel_labels.ruleset.clone())
-                .child(ui.panel_labels.hold.clone())
-                .child(ui.panel_labels.grounded.clone())
-                .child(ui.panel_labels.lock_resets.clone())
-                .child(ui.panel_labels.sfx.clone())
-                .child(if ui.state.is_classic_ruleset() {
-                    div().hidden()
-                } else {
+                .child(ui.panel_labels.hold.clone()),
+        )
+        .child(divider())
+        .child(render_lock_bar(
+            ui.state.lock_timer_ms,
+            ui.state.lock_delay_ms,
+            ui.state.is_grounded(),
+            layout.scale,
+        ))
+        .child(divider())
+        .child(div().flex_1())
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(section_gap))
+                .child(
                     div()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(ui.panel_labels.combo.clone())
-                        .child(ui.panel_labels.b2b.clone())
-                        .child(if ui.state.back_to_back {
-                            div()
-                                .text_sm()
-                                .text_color(theme::b2b_text())
-                                .child("B2B bonus active")
-                        } else {
-                            div().hidden()
-                        })
-                })
-                .child(render_lock_bar(
-                    ui.state.lock_timer_ms,
-                    ui.state.lock_delay_ms,
-                    ui.state.is_grounded(),
+                        .text_size(px(BASE_PANEL_SECTION_TEXT * layout.scale))
+                        .child("Hold"),
+                )
+                .child(render_preview(
+                    ui,
+                    ui.state.hold,
+                    PREVIEW_CELL * layout.scale,
                     layout.scale,
                 )),
         )
+        .child(divider())
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap(px(layout.gap * 0.2))
+                .gap(px(item_gap))
                 .child(
                     div()
-                        .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
-                        .child("Hold"),
-                )
-                .child(render_preview_compact(ui, ui.state.hold, layout.cell_size)),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(layout.gap * 0.2))
-                .child(
-                    div()
-                        .text_size(px(BASE_PANEL_TEXT * layout.scale * 0.95))
+                        .text_size(px(BASE_PANEL_SECTION_TEXT * layout.scale))
                         .child("Next"),
                 )
                 .child(
                     div()
                         .flex()
                         .gap(px(next_gap))
-                        .child(render_preview(ui, next_1, next_preview_cell))
-                        .child(render_preview(ui, next_2, next_preview_cell))
-                        .child(render_preview(ui, next_3, next_preview_cell)),
+                        .child(render_preview(
+                            ui,
+                            next_1,
+                            NEXT_PREVIEW_CELL * layout.scale,
+                            layout.scale,
+                        ))
+                        .child(render_preview(
+                            ui,
+                            next_2,
+                            NEXT_PREVIEW_CELL * layout.scale,
+                            layout.scale,
+                        ))
+                        .child(render_preview(
+                            ui,
+                            next_3,
+                            NEXT_PREVIEW_CELL * layout.scale,
+                            layout.scale,
+                        )),
                 ),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RenderLayout;
+    use crate::ui::style::{
+        BASE_GAP, BASE_PADDING, BOARD_HEIGHT, BOARD_WIDTH, PANEL_ITEM_SPACING,
+        PANEL_SECTION_SPACING, PANEL_WIDTH, PREVIEW_CELL, WINDOW_HEIGHT, WINDOW_WIDTH,
+    };
+
+    #[test]
+    fn base_layout_matches_design_geometry() {
+        let layout = RenderLayout::new(1.0);
+
+        assert_eq!(WINDOW_WIDTH, 480.0);
+        assert_eq!(WINDOW_HEIGHT, 720.0);
+        assert_eq!(BASE_PADDING, 16.0);
+        assert_eq!(BASE_GAP, 16.0);
+        assert_eq!(BOARD_WIDTH, 240.0);
+        assert_eq!(BOARD_HEIGHT, 480.0);
+        assert_eq!(PANEL_WIDTH, 192.0);
+        assert_eq!(layout.board_width, BOARD_WIDTH);
+        assert_eq!(layout.board_height, BOARD_HEIGHT);
+        assert_eq!(layout.panel_width, PANEL_WIDTH);
+    }
+
+    #[test]
+    fn panel_spacing_matches_design_geometry() {
+        assert_eq!(PANEL_SECTION_SPACING, 9.6);
+        assert_eq!(PANEL_ITEM_SPACING, 3.2);
+        assert_eq!(PREVIEW_CELL, 12.0);
+    }
 }

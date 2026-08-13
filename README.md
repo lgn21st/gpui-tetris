@@ -38,10 +38,11 @@ maintained contracts. Contributor workflow and verification commands are in
 ## AI Adapter
 
 The server implements the current Tetris AI Adapter Protocol over JSON Lines
-TCP. The normative protocol and its version are
-`/Users/daniel/workspace/learn/tui-tetris/protocol/adapter`; conformance evidence
-is in `docs/adapter_acceptance.md`, while queueing, scheduling, logging, startup,
-and security choices are in `docs/adapter-implementation-profile.md`.
+TCP. The normative protocol and its version come from the
+[`lgn21st/tui-tetris` Adapter package](https://github.com/lgn21st/tui-tetris/tree/main/protocol/adapter);
+conformance evidence is in `docs/adapter_acceptance.md`, while queueing,
+scheduling, logging, startup, and security choices are in
+`docs/adapter-implementation-profile.md`.
 
 It binds `127.0.0.1:7777` by default. Configure it with the `TETRIS_AI_*`
 variables documented in the implementation profile. The transport has no TLS
@@ -51,8 +52,10 @@ or authentication; keep it on loopback unless the network is trusted.
 
 `assets/icon.svg` is the editable icon source and `assets/icon.icns` is the
 macOS bundle artifact. Run `cargo bundle --release` with `cargo-bundle` to build
-an app bundle. Optional effects are loaded from `assets/sfx/`; attribution and
-source mapping are in `docs/audio_assets.md`.
+an app bundle, then seal the complete bundle with
+`codesign --force --deep --sign - target/release/bundle/osx/gpui-tetris.app`
+for local distribution. Optional effects are loaded from `assets/sfx/`;
+attribution and source mapping are in `docs/audio_assets.md`.
 
 ## License
 

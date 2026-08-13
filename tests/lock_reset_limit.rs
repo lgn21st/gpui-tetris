@@ -26,7 +26,7 @@ fn grounded_moves_reset_lock_delay_until_limit() {
 }
 
 #[test]
-fn becoming_airborne_does_not_restore_consumed_lock_resets() {
+fn becoming_airborne_restores_lock_reset_budget() {
     let mut state = GameState::new(2, GameConfig::default());
     state.active = Tetromino::new(TetrominoType::O, 3, BOARD_HEIGHT as i32 - 3);
     state.board.cells[BOARD_HEIGHT - 1][4].filled = true;
@@ -35,8 +35,8 @@ fn becoming_airborne_does_not_restore_consumed_lock_resets() {
 
     state.apply_action(GameAction::MoveRight);
     assert!(!state.is_grounded());
-    assert_eq!(state.lock_reset_count, state.lock_reset_limit);
+    assert_eq!(state.lock_reset_count, 0);
 
     state.tick(16, false);
-    assert_eq!(state.lock_reset_count, state.lock_reset_limit);
+    assert_eq!(state.lock_reset_count, 0);
 }

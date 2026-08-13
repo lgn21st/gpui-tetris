@@ -1,6 +1,6 @@
 use gpui::{
-    Context, FocusHandle, IntoElement, MouseButton, Render, Subscription, Window, div, prelude::*,
-    px, rgb,
+    Context, FocusHandle, IntoElement, MouseButton, Render, Subscription, Window, div,
+    linear_color_stop, linear_gradient, prelude::*, px,
 };
 use gpui_component::slider::{SliderEvent, SliderState};
 use gpui_tetris::adapter::SocketAdapter;
@@ -10,8 +10,10 @@ use gpui_tetris::game::state::{GameConfig, GameState};
 use std::time::Instant;
 
 use crate::ui::input::{InputAction, InputState};
-use crate::ui::render::{RenderLayout, render_board, render_panel};
-use crate::ui::style::{MIN_SCALE, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::ui::render::{
+    OverlayState, RenderLayout, render_board, render_overlay, render_panel, theme,
+};
+use crate::ui::style::{BASE_PADDING, GROUP_CORNER_RADIUS, MIN_SCALE, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::ui::ui_state::UiState;
 
 mod events;
@@ -103,20 +105,42 @@ impl Render for TetrisView {
         let scale = compute_scale(window);
         let layout = RenderLayout::new(scale);
         let now = Instant::now();
-        let focused = self.update_focus(window);
+        self.update_focus(window);
         self.advance_frame(now);
 
         window.request_animation_frame();
         self.play_sound_events();
         self.ui.sync_panel_labels();
 
-        let board = render_board(&mut self.ui, &layout, focused, now);
+        let board = render_board(&mut self.ui, &layout, now);
         let panel = render_panel(&mut self.ui, &layout);
+        let overlay = render_overlay(&OverlayState {
+            started: self.ui.started,
+            show_settings: self.ui.show_settings,
+            paused: self.ui.state.paused,
+            game_over: self.ui.state.game_over,
+            scale,
+        });
+        let game_content = div()
+            .w(px(layout.content_width))
+            .h(px(layout.board_height))
+            .relative()
+            .rounded(px(GROUP_CORNER_RADIUS * scale))
+            .bg(linear_gradient(
+                135.0,
+                linear_color_stop(theme::group_start(), 0.0),
+                linear_color_stop(theme::group_end(), 1.0),
+            ))
+            .border(px(1.0))
+            .border_color(theme::border())
+            .shadow_lg()
+            .child(div().flex().gap(px(layout.gap)).child(board).child(panel));
 
         div()
             .size_full()
             .relative()
-            .bg(rgb(0x101010))
+            .bg(theme::app_bg())
+            .p(px(BASE_PADDING * scale))
             .flex()
             .items_center()
             .justify_center()
@@ -124,7 +148,8 @@ impl Render for TetrisView {
             .on_key_down(cx.listener(Self::on_key_down))
             .on_key_up(cx.listener(Self::on_key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-            .child(div().flex().gap_4().p_4().child(board).child(panel))
+            .child(game_content)
+            .child(overlay)
             .child(self.render_settings_overlay(scale, cx))
     }
 }

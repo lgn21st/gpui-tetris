@@ -34,7 +34,7 @@ fn back_to_back_applies_to_tetris() {
 }
 
 #[test]
-fn t_spin_full_no_line_scores_and_preserves_back_to_back() {
+fn t_spin_full_no_line_scores_and_breaks_back_to_back() {
     let mut state = GameState::new(
         3,
         GameConfig {
@@ -63,7 +63,26 @@ fn t_spin_full_no_line_scores_and_preserves_back_to_back() {
     state.apply_action(GameAction::HardDrop);
 
     assert_eq!(state.score, 400);
-    assert!(state.back_to_back);
+    assert!(!state.back_to_back);
+}
+
+#[test]
+fn combo_bonus_is_not_multiplied_by_level() {
+    let mut state = GameState::new(
+        7,
+        GameConfig {
+            ruleset: Ruleset::Modern,
+            ..GameConfig::default()
+        },
+    );
+    state.level = 1;
+    state.lines = 10;
+
+    state.apply_line_clear(1, TSpinKind::None);
+    state.apply_line_clear(1, TSpinKind::None);
+
+    assert_eq!(state.score, 210);
+    assert_eq!(state.combo, 1);
 }
 
 #[test]

@@ -138,9 +138,5 @@ impl TetrisView {
 
     pub(super) fn handle_focus_lost(&mut self) {
         self.input.clear_focus_state();
-        if self.adapter.is_some() {
-            return;
-        }
-        self.ui.pause_from_focus_loss();
     }
 }

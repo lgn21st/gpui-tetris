@@ -43,6 +43,8 @@ pub(super) fn apply_line_clear(state: &mut GameState, cleared: usize, t_spin: TS
             points.saturating_mul(state.rules.b2b_bonus_num) / state.rules.b2b_bonus_den.max(1);
     }
 
+    points = points.saturating_mul(level);
+
     if cleared > 0 {
         state.line_clear_timer_ms = 180;
         state.push_sound_event(SoundEvent::LineClear(cleared as u8));
@@ -63,13 +65,11 @@ pub(super) fn apply_line_clear(state: &mut GameState, cleared: usize, t_spin: TS
         state.level = state.lines / 10;
     } else {
         state.combo = -1;
-        if state.ruleset == Ruleset::Classic {
-            state.back_to_back = false;
-        }
+        state.back_to_back = false;
     }
 
     if points > 0 {
-        state.score = state.score.saturating_add(points.saturating_mul(level));
+        state.score = state.score.saturating_add(points);
     }
 }
 

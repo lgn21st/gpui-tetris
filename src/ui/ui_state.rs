@@ -31,44 +31,25 @@ pub struct UiState {
 
 #[derive(Default)]
 pub struct PanelLabels {
-    pub last_input: String,
     pub score: String,
     pub level: String,
     pub lines: String,
     pub status: String,
     pub ruleset: String,
     pub hold: String,
-    pub grounded: String,
-    pub lock_resets: String,
-    pub sfx: String,
-    pub combo: String,
-    pub b2b: String,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 struct LabelDirty {
-    input: bool,
     stats: bool,
     status: bool,
     ruleset: bool,
     hold: bool,
-    grounded: bool,
-    lock: bool,
-    sfx: bool,
-    combo: bool,
 }
 
 impl LabelDirty {
     fn any(&self) -> bool {
-        self.input
-            || self.stats
-            || self.status
-            || self.ruleset
-            || self.hold
-            || self.grounded
-            || self.lock
-            || self.sfx
-            || self.combo
+        self.stats || self.status || self.ruleset || self.hold
     }
 
     fn mark_game_dirty(&mut self) {
@@ -76,9 +57,6 @@ impl LabelDirty {
         self.status = true;
         self.ruleset = true;
         self.hold = true;
-        self.grounded = true;
-        self.lock = true;
-        self.combo = true;
     }
 
     fn clear(&mut self) {
@@ -86,11 +64,14 @@ impl LabelDirty {
     }
 }
 
-pub const TITLE_HINT: &str = "Press Enter or Space to Start";
-pub const TITLE_SETTINGS: &str = "S: Settings";
-pub const FOCUS_HINT: &str = "Click to Focus";
-pub const PAUSED_HINT: &str = "Press P to resume";
+pub const TITLE_HINT: &str = "Press Space or Enter to start";
+pub const PAUSED_HINT: &str = "Press P to resume · R to restart";
 pub const GAME_OVER_HINT: &str = "Press R to restart";
+pub const ONBOARDING_HINTS: [&str; 3] = [
+    "Move: Left/Right, Rotate: Up",
+    "Soft drop: Down, Hard drop: Space",
+    "Hold: C, Pause: P",
+];
 
 const PREVIEW_SIZE: usize = 4;
 
@@ -109,11 +90,7 @@ impl UiState {
             ghost_mask: [false; BOARD_CELLS],
             panel_labels: PanelLabels::default(),
             labels_dirty: {
-                let mut dirty = LabelDirty {
-                    input: true,
-                    sfx: true,
-                    ..Default::default()
-                };
+                let mut dirty = LabelDirty::default();
                 dirty.mark_game_dirty();
                 dirty
             },
@@ -136,7 +113,6 @@ impl UiState {
     pub fn apply_action(&mut self, action: GameAction, record: bool) {
         if record {
             self.last_action = Some(action);
-            self.labels_dirty.input = true;
         }
         if !self.started {
             self.start_game();
@@ -186,7 +162,6 @@ impl UiState {
     pub fn toggle_mute(&mut self) {
         self.sfx_muted = !self.sfx_muted;
         self.apply_audio_volume();
-        self.labels_dirty.sfx = true;
     }
 
     pub fn adjust_volume(&mut self, delta: f32) {
@@ -197,14 +172,12 @@ impl UiState {
         self.sfx_muted = false;
         self.sfx_volume = volume.clamp(0.0, 1.0);
         self.apply_audio_volume();
-        self.labels_dirty.sfx = true;
     }
 
     pub fn reset_settings(&mut self) {
         self.sfx_muted = false;
         self.sfx_volume = DEFAULT_SFX_VOLUME;
         self.apply_audio_volume();
-        self.labels_dirty.sfx = true;
     }
 
     pub fn apply_audio_volume(&mut self) {
@@ -220,7 +193,7 @@ impl UiState {
 
     pub fn status_label(&self) -> &'static str {
         if !self.started {
-            "Title"
+            "Ready"
         } else if self.state.game_over {
             "Game Over"
         } else if self.show_settings {
@@ -341,13 +314,6 @@ impl UiState {
         self.labels_dirty.mark_game_dirty();
     }
 
-    pub fn pause_from_focus_loss(&mut self) {
-        if self.started && !self.state.game_over {
-            self.state.paused = true;
-            self.labels_dirty.mark_game_dirty();
-        }
-    }
-
     pub fn sync_board_cache(&mut self) {
         let revision = self.state.board_revision();
         if self.board_revision == revision {
@@ -363,14 +329,6 @@ impl UiState {
     }
 
     fn update_panel_labels(&mut self) {
-        let last_input = self
-            .last_action
-            .as_ref()
-            .map(action_label)
-            .unwrap_or("None");
-        if self.labels_dirty.input {
-            self.panel_labels.last_input = format!("Last input: {}", last_input);
-        }
         if self.labels_dirty.stats {
             self.panel_labels.score = format!("Score: {}", self.state.score);
             self.panel_labels.level = format!("Level: {}", self.state.level);
@@ -386,40 +344,6 @@ impl UiState {
             self.panel_labels.hold = format!(
                 "Hold: {}",
                 if self.state.can_hold { "Ready" } else { "Used" }
-            );
-        }
-        if self.labels_dirty.grounded {
-            self.panel_labels.grounded = format!(
-                "Grounded: {}",
-                if self.state.is_grounded() {
-                    "Yes"
-                } else {
-                    "No"
-                }
-            );
-        }
-        if self.labels_dirty.lock {
-            self.panel_labels.lock_resets = format!(
-                "Lock resets: {}/{}",
-                self.state.lock_reset_remaining(),
-                self.state.lock_reset_limit
-            );
-        }
-        if self.labels_dirty.sfx {
-            self.panel_labels.sfx = format!("SFX: {}", self.sfx_volume_label());
-        }
-        if self.labels_dirty.combo {
-            self.panel_labels.combo = format!(
-                "Combo: {}",
-                if self.state.combo >= 0 {
-                    self.state.combo.to_string()
-                } else {
-                    "-".to_string()
-                }
-            );
-            self.panel_labels.b2b = format!(
-                "B2B: {}",
-                if self.state.back_to_back { "Yes" } else { "No" }
             );
         }
     }
@@ -496,20 +420,6 @@ fn build_preview_mask(kind: TetrominoType) -> [[bool; PREVIEW_SIZE]; PREVIEW_SIZ
         }
     }
     filled
-}
-
-fn action_label(action: &GameAction) -> &'static str {
-    match action {
-        GameAction::MoveLeft => "Left",
-        GameAction::MoveRight => "Right",
-        GameAction::SoftDrop => "Soft Drop",
-        GameAction::HardDrop => "Hard Drop",
-        GameAction::RotateCw => "Rotate CW",
-        GameAction::RotateCcw => "Rotate CCW",
-        GameAction::Hold => "Hold",
-        GameAction::Pause => "Pause",
-        GameAction::Restart => "Restart",
-    }
 }
 
 #[cfg(test)]
