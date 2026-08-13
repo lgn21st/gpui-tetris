@@ -67,6 +67,10 @@ pub fn panel_text() -> Rgba {
     rgb(0xe6e6e6)
 }
 
+pub fn secondary_text() -> Rgba {
+    rgb(0xa3a3a3)
+}
+
 pub fn b2b_text() -> Rgba {
     rgb(0xfacc15)
 }

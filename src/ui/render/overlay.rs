@@ -2,38 +2,13 @@ use gpui::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::style::{BASE_HINT_TEXT, BASE_TITLE_TEXT};
-use crate::ui::ui_state::{
-    FOCUS_HINT, GAME_OVER_HINT, PAUSED_HINT, SETTINGS_BACK, SETTINGS_SHORTCUTS, TITLE_HINT,
-    TITLE_SETTINGS,
-};
+use crate::ui::ui_state::{FOCUS_HINT, GAME_OVER_HINT, PAUSED_HINT, TITLE_HINT, TITLE_SETTINGS};
 
 pub fn render_overlay(state: &OverlayState) -> impl IntoElement {
     let title_size = (BASE_TITLE_TEXT * state.scale).max(16.0);
     let hint_size = (BASE_HINT_TEXT * state.scale).max(10.0);
     if state.show_settings {
-        return div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .bottom_0()
-            .bg(theme::overlay_bg())
-            .opacity(0.86)
-            .flex()
-            .flex_col()
-            .gap_2()
-            .justify_center()
-            .items_center()
-            .text_color(theme::overlay_text())
-            .text_size(px(title_size))
-            .child("Settings")
-            .child(div().text_size(px(hint_size)).child(format!(
-                "SFX Volume: {}{}",
-                state.sfx_label,
-                if state.muted { " (M)" } else { "" }
-            )))
-            .child(div().text_size(px(hint_size)).child(SETTINGS_SHORTCUTS))
-            .child(div().text_size(px(hint_size)).child(SETTINGS_BACK));
+        return div().hidden();
     }
 
     if !state.started {
@@ -115,7 +90,5 @@ pub struct OverlayState {
     pub paused: bool,
     pub game_over: bool,
     pub focused: bool,
-    pub sfx_label: String,
-    pub muted: bool,
     pub scale: f32,
 }

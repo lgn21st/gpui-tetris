@@ -113,8 +113,6 @@ pub fn render_board(
             paused: ui.state.paused,
             game_over: ui.state.game_over,
             focused,
-            sfx_label: ui.sfx_volume_label(),
-            muted: ui.sfx_muted,
             scale: layout.scale,
         }))
 }

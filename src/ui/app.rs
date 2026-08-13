@@ -2,6 +2,7 @@ use gpui::{
     Action, App, Application, Bounds, Entity, KeyBinding, Menu, MenuItem, SystemMenuType,
     WindowBounds, WindowOptions, actions, prelude::*, px, size,
 };
+use gpui_component::{Root, Theme, ThemeMode};
 
 use crate::ui::style::{MIN_SCALE, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::ui::view::TetrisView;
@@ -14,6 +15,7 @@ actions!(
     tetris,
     [
         Quit,
+        ToggleSettings,
         ToggleFullscreen,
         MoveLeft,
         MoveRight,
@@ -29,6 +31,9 @@ actions!(
 
 pub fn run() {
     Application::new().run(|cx: &mut App| {
+        gpui_component::init(cx);
+        Theme::change(ThemeMode::Dark, None, cx);
+
         let bounds = Bounds::centered(None, size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -50,6 +55,7 @@ pub fn run() {
 
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+        cx.bind_keys([KeyBinding::new("cmd-,", ToggleSettings, None)]);
         cx.bind_keys([
             KeyBinding::new("up", RotateCw, None),
             KeyBinding::new("space", HardDrop, None),
@@ -61,6 +67,8 @@ pub fn run() {
             Menu {
                 name: "gpui-tetris".into(),
                 items: vec![
+                    MenuItem::action("Settings…", ToggleSettings),
+                    MenuItem::separator(),
                     MenuItem::os_submenu("Services", SystemMenuType::Services),
                     MenuItem::separator(),
                     MenuItem::action("Quit", Quit),
@@ -72,9 +80,10 @@ pub fn run() {
             },
         ]);
 
-        let window = match cx.open_window(options, move |_, cx| {
-            let audio = audio_engine.clone();
-            cx.new(|cx| TetrisView::new(cx, audio))
+        let view = cx.new(|cx| TetrisView::new(cx, audio_engine));
+        let root_view = view.clone();
+        let window = match cx.open_window(options, move |window, cx| {
+            cx.new(|cx| Root::new(root_view, window, cx))
         }) {
             Ok(window) => window,
             Err(err) => {
@@ -101,15 +110,6 @@ pub fn run() {
             KeyBinding::new("cmd-ctrl-f", ToggleFullscreen, None),
             KeyBinding::new("ctrl-cmd-f", ToggleFullscreen, None),
         ]);
-        let view = match window.update(cx, |_, _, cx| cx.entity()) {
-            Ok(view) => view,
-            Err(err) => {
-                eprintln!("failed to initialize game view: {err}");
-                cx.quit();
-                return;
-            }
-        };
-
         register_action::<MoveLeft>(cx, view.clone(), GameAction::MoveLeft);
         register_action::<MoveRight>(cx, view.clone(), GameAction::MoveRight);
         register_action::<SoftDrop>(cx, view.clone(), GameAction::SoftDrop);
@@ -118,13 +118,15 @@ pub fn run() {
         register_action::<RotateCcw>(cx, view.clone(), GameAction::RotateCcw);
         register_action::<Hold>(cx, view.clone(), GameAction::Hold);
         register_action::<Pause>(cx, view.clone(), GameAction::Pause);
-        register_action::<Restart>(cx, view, GameAction::Restart);
+        register_action::<Restart>(cx, view.clone(), GameAction::Restart);
+        let settings_view = view.clone();
+        cx.on_action(move |_: &ToggleSettings, cx| {
+            settings_view.update(cx, |view, cx| {
+                view.toggle_settings();
+                cx.notify();
+            });
+        });
 
-        if let Err(err) = window.update(cx, |view, window, _| {
-            window.focus(view.focus_handle());
-        }) {
-            eprintln!("failed to focus game window: {err}");
-        }
         cx.activate(true);
     })
 }

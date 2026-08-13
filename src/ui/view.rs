@@ -1,6 +1,8 @@
 use gpui::{
-    Context, FocusHandle, IntoElement, MouseButton, Render, Window, div, prelude::*, px, rgb,
+    Context, FocusHandle, IntoElement, MouseButton, Render, Subscription, Window, div, prelude::*,
+    px, rgb,
 };
+use gpui_component::slider::{SliderEvent, SliderState};
 use gpui_tetris::adapter::SocketAdapter;
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
@@ -13,6 +15,7 @@ use crate::ui::style::{MIN_SCALE, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::ui::ui_state::UiState;
 
 mod events;
+mod settings;
 
 const MAX_CATCH_UP_STEPS: u64 = 15;
 
@@ -25,6 +28,9 @@ pub struct TetrisView {
     input: InputState,
     was_focused: bool,
     input_actions: Vec<InputAction>,
+    volume_slider: gpui::Entity<SliderState>,
+    settings_slider_needs_sync: bool,
+    _volume_subscription: Subscription,
 }
 
 impl TetrisView {
@@ -47,6 +53,19 @@ impl TetrisView {
         if adapter.is_some() {
             ui.start_game();
         }
+        let volume_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.0)
+                .max(1.0)
+                .step(crate::ui::style::SFX_VOLUME_STEP)
+                .default_value(ui.sfx_volume)
+        });
+        let volume_subscription =
+            cx.subscribe(&volume_slider, |view, _, event: &SliderEvent, cx| {
+                let SliderEvent::Change(value) = event;
+                view.ui.set_volume(value.end());
+                cx.notify();
+            });
         Self {
             ui,
             adapter,
@@ -56,20 +75,31 @@ impl TetrisView {
             input: InputState::new(),
             was_focused: false,
             input_actions: Vec::with_capacity(16),
+            volume_slider,
+            settings_slider_needs_sync: false,
+            _volume_subscription: volume_subscription,
         }
-    }
-
-    pub fn focus_handle(&self) -> &FocusHandle {
-        &self.focus_handle
     }
 
     pub fn receive_action(&mut self, action: GameAction) {
         self.ui.receive_action(action);
     }
+
+    pub fn toggle_settings(&mut self) {
+        self.ui.toggle_settings();
+        self.settings_slider_needs_sync = self.ui.show_settings;
+    }
 }
 
 impl Render for TetrisView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.last_tick.is_none() {
+            self.focus_handle.focus(window);
+        }
+        if self.settings_slider_needs_sync {
+            self.sync_volume_slider(window, cx);
+            self.settings_slider_needs_sync = false;
+        }
         let scale = compute_scale(window);
         let layout = RenderLayout::new(scale);
         let now = Instant::now();
@@ -85,6 +115,7 @@ impl Render for TetrisView {
 
         div()
             .size_full()
+            .relative()
             .bg(rgb(0x101010))
             .flex()
             .items_center()
@@ -94,6 +125,7 @@ impl Render for TetrisView {
             .on_key_up(cx.listener(Self::on_key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .child(div().flex().gap_4().p_4().child(board).child(panel))
+            .child(self.render_settings_overlay(scale, cx))
     }
 }
 

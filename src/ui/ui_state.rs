@@ -86,8 +86,6 @@ impl LabelDirty {
     }
 }
 
-pub const SETTINGS_SHORTCUTS: &str = "M: mute · +/-: volume · 0: reset";
-pub const SETTINGS_BACK: &str = "S or Esc: back";
 pub const TITLE_HINT: &str = "Press Enter or Space to Start";
 pub const TITLE_SETTINGS: &str = "S: Settings";
 pub const FOCUS_HINT: &str = "Click to Focus";
@@ -192,10 +190,12 @@ impl UiState {
     }
 
     pub fn adjust_volume(&mut self, delta: f32) {
-        if self.sfx_muted {
-            self.sfx_muted = false;
-        }
-        self.sfx_volume = (self.sfx_volume + delta).clamp(0.0, 1.0);
+        self.set_volume(self.sfx_volume + delta);
+    }
+
+    pub fn set_volume(&mut self, volume: f32) {
+        self.sfx_muted = false;
+        self.sfx_volume = volume.clamp(0.0, 1.0);
         self.apply_audio_volume();
         self.labels_dirty.sfx = true;
     }
@@ -552,6 +552,33 @@ mod tests {
         ui.toggle_mute();
         ui.sync_panel_labels();
         assert_eq!(ui.sfx_volume_label(), "Muted");
+    }
+
+    #[test]
+    fn setting_volume_from_control_clamps_and_unmutes() {
+        let state = GameState::new(1, Default::default());
+        let mut ui = UiState::new(state, None);
+        ui.toggle_mute();
+
+        ui.set_volume(1.5);
+
+        assert_eq!(ui.sfx_volume, 1.0);
+        assert!(!ui.sfx_muted);
+        assert_eq!(ui.sfx_volume_label(), "100%");
+    }
+
+    #[test]
+    fn settings_block_game_actions_from_component_interactions() {
+        let state = GameState::new(1, Default::default());
+        let mut ui = UiState::new(state, None);
+        ui.start_game();
+        ui.toggle_settings();
+        let active_before = ui.active_snapshot();
+
+        ui.receive_action(GameAction::MoveLeft);
+
+        assert_eq!(ui.active_snapshot(), active_before);
+        assert!(ui.state.paused);
     }
 
     #[test]

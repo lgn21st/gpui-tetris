@@ -11,6 +11,12 @@
 `GameAction` is the mutation boundary. UI and Adapter inputs both pass through
 it, and Adapter placement reuses core collision, rotation, and scoring logic.
 
+The window root is a `gpui-component` `Root` around `TetrisView`. The component
+layer supplies reusable settings controls; `TetrisView` retains game focus and
+keyboard shortcuts. The board, HUD, overlays tied to gameplay, and animation
+remain project-owned GPUI elements so the per-frame path does not depend on
+general-purpose widgets.
+
 ## Runtime
 
 `TetrisView::render` drives the application loop:
@@ -35,6 +41,7 @@ boundary. Focus loss, menus, and device state remain UI concerns.
 | --- | --- |
 | Movement, timing, rotation, scoring | `game/state/` |
 | Pieces and board | `game/pieces.rs`, `game/board.rs` |
-| HUD and rendering | `ui/ui_state.rs`, `ui/render/` |
+| HUD and game rendering | `ui/ui_state.rs`, `ui/render/` |
+| Settings components and control events | `ui/view/settings.rs` |
 | Protocol model, planning, transport | `adapter/` |
 | Audio | `audio.rs` |

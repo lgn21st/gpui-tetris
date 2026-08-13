@@ -8,8 +8,9 @@ impl TetrisView {
         &mut self,
         event: &KeyDownEvent,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
+        let mut sync_volume = false;
         match event.keystroke.key.as_str() {
             "enter" | "return" => {
                 if !self.ui.started {
@@ -17,19 +18,22 @@ impl TetrisView {
                 }
             }
             "s" => {
-                self.ui.toggle_settings();
+                self.toggle_settings();
             }
             "m" => {
                 self.ui.toggle_mute();
             }
             "-" => {
                 self.ui.adjust_volume(-SFX_VOLUME_STEP);
+                sync_volume = true;
             }
             "=" | "+" => {
                 self.ui.adjust_volume(SFX_VOLUME_STEP);
+                sync_volume = true;
             }
             "0" => {
                 self.ui.reset_settings();
+                sync_volume = true;
             }
             "escape" => {
                 self.ui.close_settings();
@@ -68,6 +72,10 @@ impl TetrisView {
                 self.apply_input_actions(&actions);
             }
             _ => {}
+        }
+
+        if sync_volume {
+            self.sync_volume_slider(window, cx);
         }
 
         if event.keystroke.key.as_str() == "f"

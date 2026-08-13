@@ -10,9 +10,12 @@ optional WAV effects, and a TCP adapter for AI clients.
 | --- | --- |
 | Left/Right, Down, Up | Move, soft drop, rotate clockwise |
 | Space, C, P, R | Hard drop, hold, pause, restart |
-| Enter, S, M | Start, settings, mute |
+| Enter, S or `Cmd+,`, M | Start, settings, mute |
 | `+`/`-`, `0` | Adjust or reset SFX volume |
 | Cmd+Ctrl+F | Toggle fullscreen |
+
+The settings overlay provides mouse controls for mute, volume, reset, and
+close; the shortcuts above remain available while it is open.
 
 Xbox defaults: D-pad/stick moves, A/B rotates, X holds, Y hard-drops,
 Start pauses, and Select/Back restarts.
