@@ -34,29 +34,14 @@ An interrupted or failed preparation does not create a completed candidate.
 Existing candidate directories are never replaced. Do not delete or edit files
 in an already published candidate to reuse it for different source.
 
-## Signing and notarization
+## Signing scope
 
-The default is an ad-hoc signature, not Apple notarization. For Developer ID
-distribution, install your certificate in Keychain and store notarization
-credentials using `xcrun notarytool store-credentials`. Do not put passwords,
-private keys or credentials in source, command files or release notes.
-
-```bash
-python3 -B scripts/release.py prepare \
-  --verifier /absolute/path/to/adapter_verify.py \
-  --identity 'Developer ID Application: YOUR NAME (TEAMID)' \
-  --notary-profile YOUR_KEYCHAIN_PROFILE
-```
-
-The identity and profile must be supplied together. This path enables hardened
-runtime and timestamps, waits for Apple's Accepted result, retains the notary
-log, staples and validates the ticket, then recreates the ZIP. It verifies the
-stapled app again after extraction. Actual notarization requires a valid paid
-Apple Developer membership and credentials; having this code is not evidence
-that a build has been notarized.
-
-Apple's references: [notarizing macOS software](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution),
-[customizing the workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+Release bundles use an ad-hoc signature. Developer ID signing and Apple
+notarization are explicitly outside the current project requirements; the tool
+does not accept certificates or credentials. Notes and manifests must state
+that the app is not notarized. Signature verification checks bundle integrity,
+not Apple's approval to distribute it. First launch may require user approval
+in macOS.
 
 ## Upload and publish
 

@@ -52,16 +52,6 @@ class ReleaseIntegrityTests(unittest.TestCase):
                     release.publish(args)
                 run.assert_not_called()
 
-    def test_invalid_signing_pair_stops_before_build(self):
-        args = type("Args", (), {"identity": "-", "notary_profile": "profile"})()
-        with patch.object(release, "source", return_value=({}, "commit")):
-            with patch.object(release.platform, "system", return_value="Darwin"):
-                with patch.object(release.platform, "machine", return_value="arm64"):
-                    with patch.object(release, "run") as run:
-                        with self.assertRaisesRegex(ValueError, "supplied together"):
-                            release.prepare(args)
-                        run.assert_not_called()
-
     def test_failed_ci_prevents_release_creation(self):
         args = type("Args", (), {"directory": self.directory})()
         with patch.object(release, "source", return_value=({"version": "0.0.0"}, "tested-commit")):

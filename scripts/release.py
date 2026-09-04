@@ -97,8 +97,6 @@ def prepare(args):
     package, commit = source()
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise ValueError("Prepare requires an Apple Silicon Mac")
-    if bool(args.notary_profile) != (args.identity != "-"):
-        raise ValueError("Developer ID identity and notary profile must be supplied together")
     verifier = args.verifier.resolve(strict=True)
     out = ROOT / "target/releases" / f'v{package["version"]}-{commit[:12]}'
     if out.exists():
@@ -115,10 +113,7 @@ def prepare(args):
     run("cargo", "build", "--release", "--locked", "--offline")
     run("cargo", "bundle", "--release", env=dict(os.environ, CARGO_NET_OFFLINE="true"))
     app = ROOT / "target/release/bundle/osx" / (package["metadata"]["bundle"]["name"] + ".app")
-    signing = ["codesign", "--force", "--sign", args.identity]
-    if args.notary_profile:
-        signing += ["--options", "runtime", "--timestamp"]
-    run(*signing, app)
+    run("codesign", "--force", "--sign", "-", app)
     verify_bundle(app, package)
     # Only complete candidates are moved into the final output directory.
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -126,23 +121,9 @@ def prepare(args):
         staged = Path(staging)
         archive = staged / f'gpui-tetris-v{package["version"]}-macos-arm64.zip'
         zip_app(app, archive)
-        if args.notary_profile:
-            response = json.loads(run("xcrun", "notarytool", "submit", archive,
-                                      "--keychain-profile", args.notary_profile, "--wait",
-                                      "--output-format", "json", capture=True))
-            if response.get("status") != "Accepted":
-                raise RuntimeError(f"Notarization was not accepted: {response.get('status')}")
-            run("xcrun", "notarytool", "log", response["id"], "--keychain-profile",
-                args.notary_profile, staged / "notarization-log.json")
-            run("xcrun", "stapler", "staple", app)
-            run("xcrun", "stapler", "validate", app)
-            archive.unlink()
-            zip_app(app, archive)
         with tempfile.TemporaryDirectory(prefix="gpui-release-check-") as extracted:
             run("ditto", "-x", "-k", archive, extracted)
             binary, info = verify_bundle(Path(extracted) / app.name, package)
-            if args.notary_profile:
-                run("xcrun", "stapler", "validate", Path(extracted) / app.name)
             verify_protocol(binary, verifier)
         if source()[1] != commit:
             raise ValueError("Source changed during preparation")
@@ -152,8 +133,8 @@ def prepare(args):
             "archive_sha256": digest(archive), "bundle_version": info["CFBundleVersion"],
             "rustc": run("rustc", "-Vv", capture=True).strip(),
             "cargo_bundle": run("cargo", "bundle", "--version", capture=True).strip(),
-            "signing": "Developer ID" if args.notary_profile else "ad-hoc",
-            "apple_notarized": bool(args.notary_profile),
+            "signing": "ad-hoc",
+            "apple_notarized": False,
             "verifier_sha256": digest(verifier),
             "validation": ["tests", "headless tests", "clippy", "doc tests", "format",
                            "online audit", "bundle resources", "signature", "adapter conformance"],
@@ -218,8 +199,6 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     build = commands.add_parser("prepare")
     build.add_argument("--verifier", type=Path, required=True, help="Upstream adapter_verify.py")
-    build.add_argument("--identity", default="-", help="Developer ID identity or '-' for ad-hoc")
-    build.add_argument("--notary-profile", help="Existing notarytool Keychain profile (never a password)")
     build.set_defaults(action=prepare)
     check = commands.add_parser("verify")
     check.add_argument("directory", type=Path)
