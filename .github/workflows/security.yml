@@ -1,0 +1,23 @@
+name: Dependency security
+
+on:
+  push:
+    paths: [Cargo.lock, .github/workflows/security.yml]
+  pull_request:
+    paths: [Cargo.lock, .github/workflows/security.yml]
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - run: cargo install cargo-audit --locked
+      - name: Check current advisories and yanked dependencies
+        run: cargo audit --deny yanked

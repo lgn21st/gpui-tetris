@@ -25,10 +25,11 @@ For UI dependency changes, inspect the resolved macOS graphics/font graph with
 `cargo tree` and confirm that Kit still enables runtime shaders.
 
 After dependency changes, run the gates in `AGENTS.md`, `cargo update
---dry-run`, and `cargo audit --no-fetch --no-yanked`. The resolved graph has no
-reported vulnerabilities; current upstream warnings cover unmaintained
-transitive crates and future Rust incompatibilities. Recheck command output for
-the current packages and versions.
+--dry-run`, and `cargo audit --deny yanked`. This fetches the current
+RustSec database and checks registry withdrawal status. Known vulnerabilities and yanked versions fail the gate; unmaintained
+transitive crates remain visible warnings. The scheduled Dependency security
+workflow runs the same check weekly and on lockfile changes. Recheck command
+output for the current packages and versions.
 
 The maintenance warnings are owned by the upstream Kit/GPUI dependency graph:
 `bincode` comes through Base's syntax-highlighting stack, `instant` through
