@@ -54,7 +54,7 @@ fn tick_locks_piece_after_lock_delay() {
 
     state.tick(150, false);
     assert_eq!(state.lock_timer_ms, 0);
-    assert!(state.board.cells[BOARD_HEIGHT - 1][4].filled);
+    assert!(state.board.cells[BOARD_HEIGHT - 1][4].kind.is_some());
 }
 
 #[test]

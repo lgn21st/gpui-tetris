@@ -32,7 +32,6 @@ fn rotate_kicks_around_blocker() {
     state.active = Tetromino::new(TetrominoType::T, 0, 0);
     state.active.rotation = Rotation::North;
 
-    state.board.cells[0][1].filled = true;
     state.board.cells[0][1].kind = Some(TetrominoType::I);
 
     state.apply_action(GameAction::RotateCw);
@@ -49,7 +48,6 @@ fn rotate_fails_when_all_kicks_blocked() {
 
     for y in 0..BOARD_HEIGHT {
         for x in 0..BOARD_WIDTH {
-            state.board.cells[y][x].filled = true;
             state.board.cells[y][x].kind = Some(TetrominoType::O);
         }
     }

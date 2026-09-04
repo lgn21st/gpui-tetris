@@ -38,7 +38,7 @@ fn hard_drop_locks_piece() {
         .cells
         .iter()
         .flatten()
-        .filter(|cell| cell.filled)
+        .filter(|cell| cell.kind.is_some())
         .count();
     assert_eq!(filled, 4);
 }
@@ -49,7 +49,6 @@ fn move_right_stops_at_occupied_cell() {
     let mut state = GameState::new(4, config);
     state.active = Tetromino::new(TetrominoType::O, 3, 0);
     state.active.rotation = Rotation::North;
-    state.board.cells[0][5].filled = true;
     state.board.cells[0][5].kind = Some(TetrominoType::I);
 
     state.apply_action(GameAction::MoveRight);
@@ -62,13 +61,12 @@ fn hard_drop_stops_above_blocker() {
     let mut state = GameState::new(5, config);
     state.active = Tetromino::new(TetrominoType::O, 3, 0);
     state.active.rotation = Rotation::North;
-    state.board.cells[19][4].filled = true;
     state.board.cells[19][4].kind = Some(TetrominoType::Z);
 
     state.apply_action(GameAction::HardDrop);
 
-    assert!(state.board.cells[18][4].filled);
-    assert!(state.board.cells[19][4].filled);
+    assert!(state.board.cells[18][4].kind.is_some());
+    assert!(state.board.cells[19][4].kind.is_some());
 }
 
 #[test]

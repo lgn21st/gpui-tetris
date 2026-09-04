@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use crossbeam_channel::{Receiver, Sender, TrySendError};
@@ -87,6 +87,11 @@ fn load_assets(asset_dir: &Path) -> anyhow::Result<HashMap<&'static str, SoundAs
         }
     }
 
+    anyhow::ensure!(
+        !assets.is_empty(),
+        "no usable SFX assets in {}",
+        asset_dir.display()
+    );
     Ok(assets)
 }
 
@@ -108,15 +113,15 @@ fn build_output_stream(
         channels,
         sample_rate,
         rx,
-        assets: Arc::new(assets),
-        voices: Arc::new(Mutex::new(Vec::<Voice>::new())),
+        assets,
+        voices: Vec::with_capacity(MAX_VOICES),
         master_gain,
     };
 
     let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => build_output_stream_f32(&device, &config, params)?,
-        cpal::SampleFormat::I16 => build_output_stream_i16(&device, &config, params)?,
-        cpal::SampleFormat::U16 => build_output_stream_u16(&device, &config, params)?,
+        cpal::SampleFormat::F32 => build_typed_stream::<f32>(&device, &config, params)?,
+        cpal::SampleFormat::I16 => build_typed_stream::<i16>(&device, &config, params)?,
+        cpal::SampleFormat::U16 => build_typed_stream::<u16>(&device, &config, params)?,
         _ => {
             return Err(anyhow::anyhow!(
                 "unsupported sample format: {:?}",
@@ -132,120 +137,35 @@ struct StreamParams {
     channels: usize,
     sample_rate: u32,
     rx: Receiver<SoundEvent>,
-    assets: Arc<HashMap<&'static str, SoundAsset>>,
-    voices: Arc<Mutex<Vec<Voice>>>,
+    assets: HashMap<&'static str, SoundAsset>,
+    voices: Vec<Voice>,
     master_gain: Arc<AtomicU32>,
 }
 
-fn build_output_stream_f32(
+fn build_typed_stream<T>(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
-    params: StreamParams,
-) -> anyhow::Result<cpal::Stream> {
-    let StreamParams {
-        channels,
-        sample_rate,
-        rx,
-        assets,
-        voices,
-        master_gain,
-    } = params;
+    mut params: StreamParams,
+) -> anyhow::Result<cpal::Stream>
+where
+    T: cpal::SizedSample + cpal::FromSample<f32>,
+{
     device
         .build_output_stream(
             (*config).into(),
-            move |data: &mut [f32], _| {
-                let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                render_audio(data, channels, sample_rate, &rx, &assets, &voices, gain);
-            },
-            move |err| {
-                eprintln!("audio stream error: {err}");
-            },
-            None,
-        )
-        .map_err(Into::into)
-}
-
-fn build_output_stream_i16(
-    device: &cpal::Device,
-    config: &cpal::SupportedStreamConfig,
-    params: StreamParams,
-) -> anyhow::Result<cpal::Stream> {
-    let StreamParams {
-        channels,
-        sample_rate,
-        rx,
-        assets,
-        voices,
-        master_gain,
-    } = params;
-    let mut scratch: Vec<f32> = Vec::new();
-    device
-        .build_output_stream(
-            (*config).into(),
-            move |data: &mut [i16], _| {
-                if scratch.len() != data.len() {
-                    scratch.resize(data.len(), 0.0);
-                }
-                let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
+            move |data: &mut [T], _| {
+                let gain = bits_to_f32(params.master_gain.load(Ordering::Relaxed));
                 render_audio(
-                    &mut scratch,
-                    channels,
-                    sample_rate,
-                    &rx,
-                    &assets,
-                    &voices,
+                    data,
+                    params.channels,
+                    params.sample_rate,
+                    &params.rx,
+                    &params.assets,
+                    &mut params.voices,
                     gain,
                 );
-                for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
-                    *dst = <i16 as cpal::Sample>::from_sample(*sample);
-                }
             },
-            move |err| {
-                eprintln!("audio stream error: {err}");
-            },
-            None,
-        )
-        .map_err(Into::into)
-}
-
-fn build_output_stream_u16(
-    device: &cpal::Device,
-    config: &cpal::SupportedStreamConfig,
-    params: StreamParams,
-) -> anyhow::Result<cpal::Stream> {
-    let StreamParams {
-        channels,
-        sample_rate,
-        rx,
-        assets,
-        voices,
-        master_gain,
-    } = params;
-    let mut scratch: Vec<f32> = Vec::new();
-    device
-        .build_output_stream(
-            (*config).into(),
-            move |data: &mut [u16], _| {
-                if scratch.len() != data.len() {
-                    scratch.resize(data.len(), 0.0);
-                }
-                let gain = bits_to_f32(master_gain.load(Ordering::Relaxed));
-                render_audio(
-                    &mut scratch,
-                    channels,
-                    sample_rate,
-                    &rx,
-                    &assets,
-                    &voices,
-                    gain,
-                );
-                for (dst, sample) in data.iter_mut().zip(scratch.iter()) {
-                    *dst = <u16 as cpal::Sample>::from_sample(*sample);
-                }
-            },
-            move |err| {
-                eprintln!("audio stream error: {err}");
-            },
+            move |err| eprintln!("audio stream error: {err}"),
             None,
         )
         .map_err(Into::into)
@@ -272,79 +192,59 @@ fn select_output_config(device: &cpal::Device) -> anyhow::Result<cpal::Supported
     }
 }
 
-fn render_audio(
-    output: &mut [f32],
+fn render_audio<T: cpal::Sample + cpal::FromSample<f32>>(
+    output: &mut [T],
     channels: usize,
     device_rate: u32,
     rx: &Receiver<SoundEvent>,
-    assets: &Arc<HashMap<&'static str, SoundAsset>>,
-    voices: &Arc<Mutex<Vec<Voice>>>,
+    assets: &HashMap<&'static str, SoundAsset>,
+    voices: &mut Vec<Voice>,
     master_gain: f32,
 ) {
-    for event in rx.try_iter() {
-        let (asset_key, gain) = sound_event_spec(&event);
-        if let Some(asset) = assets.get(asset_key) {
-            let step = asset.sample_rate as f32 / device_rate as f32;
-            let voice = Voice {
-                samples: asset.samples.clone(),
-                channels: asset.channels,
-                position: 0.0,
-                step,
-                gain,
-            };
-            if let Ok(mut guard) = voices.lock() {
-                push_voice(&mut guard, voice);
-            }
+    // A bounded queue alone cannot bound draining while a producer refills it.
+    for event in rx.try_iter().take(32) {
+        let (key, gain) = sound_event_spec(&event);
+        if let Some(asset) = assets.get(key) {
+            push_voice(
+                voices,
+                Voice {
+                    samples: asset.samples.clone(),
+                    channels: asset.channels,
+                    position: 0.0,
+                    step: asset.sample_rate as f32 / device_rate as f32,
+                    gain,
+                },
+            );
         }
     }
-
-    for sample in output.iter_mut() {
-        *sample = 0.0;
-    }
-
-    let mut dead = [0usize; MAX_VOICES];
-    let mut dead_len = 0usize;
-    if let Ok(mut guard) = voices.lock() {
-        for (index, voice) in guard.iter_mut().enumerate() {
-            for frame in output.chunks_mut(channels) {
-                if voice.position as usize >= voice.samples.len() / voice.channels as usize {
-                    if dead_len < dead.len() {
-                        dead[dead_len] = index;
-                        dead_len += 1;
-                    }
-                    break;
-                }
-
-                let frame_index = voice.position as usize;
-                let base = frame_index * voice.channels as usize;
-                let left = voice.samples.get(base).copied().unwrap_or(0.0) * voice.gain;
-                let right = if voice.channels > 1 {
-                    voice.samples.get(base + 1).copied().unwrap_or(0.0) * voice.gain
-                } else {
-                    left
-                };
-
-                if channels == 1 {
-                    frame[0] += (left + right) * 0.5;
-                } else {
-                    frame[0] += left;
-                    frame[1] += right;
-                }
-
-                voice.position += voice.step;
-            }
-        }
-
-        for slot in (0..dead_len).rev() {
-            let index = dead[slot];
-            guard.swap_remove(index);
-        }
-    }
-
     let master = master_gain.clamp(0.0, 1.0);
-    for sample in output.iter_mut() {
-        *sample = soft_clip(*sample * master).clamp(-1.0, 1.0);
+    for frame in output.chunks_mut(channels) {
+        let (mut left, mut right) = (0.0, 0.0);
+        for voice in voices.iter_mut() {
+            let base = voice.position as usize * voice.channels as usize;
+            let l = voice.samples.get(base).copied().unwrap_or(0.0) * voice.gain;
+            let r = if voice.channels > 1 {
+                voice.samples.get(base + 1).copied().unwrap_or(0.0) * voice.gain
+            } else {
+                l
+            };
+            left += l;
+            right += r;
+            voice.position += voice.step;
+        }
+        frame.fill(T::from_sample(0.0));
+        let sample = if channels == 1 {
+            (left + right) * 0.5
+        } else {
+            left
+        };
+        frame[0] = T::from_sample(soft_clip(sample * master).clamp(-1.0, 1.0));
+        if frame.len() > 1 {
+            frame[1] = T::from_sample(soft_clip(right * master).clamp(-1.0, 1.0));
+        }
     }
+    voices
+        .retain(|voice| (voice.position as usize) < voice.samples.len() / voice.channels as usize);
 }
 
 fn load_wav(path: &Path) -> anyhow::Result<SoundAsset> {
@@ -440,6 +340,49 @@ mod tests {
             step: 1.0,
             gain,
         }
+    }
+
+    #[test]
+    fn mixer_converts_samples_and_removes_finished_voices_without_scratch_allocation() {
+        let (_tx, rx) = crossbeam_channel::bounded(1);
+        let assets = HashMap::new();
+        let voice = Voice {
+            samples: Arc::new(vec![1.0, -1.0]),
+            channels: 2,
+            position: 0.0,
+            step: 1.0,
+            gain: 1.0,
+        };
+        let mut voices = Vec::with_capacity(MAX_VOICES);
+        voices.push(voice.clone());
+        let mut output = [0.0_f32; 4];
+        render_audio(&mut output, 2, 44_100, &rx, &assets, &mut voices, 0.5);
+        assert_eq!(output, [soft_clip(0.5), soft_clip(-0.5), 0.0, 0.0]);
+        assert!(voices.is_empty());
+        assert_eq!(voices.capacity(), MAX_VOICES);
+        voices.push(voice);
+        let mut integer = [0_i16; 2];
+        render_audio(&mut integer, 2, 44_100, &rx, &assets, &mut voices, 0.5);
+        assert_eq!(integer[0], <i16 as cpal::Sample>::from_sample(output[0]));
+        assert_eq!(integer[1], <i16 as cpal::Sample>::from_sample(output[1]));
+    }
+
+    #[test]
+    fn mixer_limits_events_per_callback_even_with_queue_backlog() {
+        let (tx, rx) = crossbeam_channel::bounded(64);
+        for _ in 0..64 {
+            tx.send(SoundEvent::Move).unwrap();
+        }
+        render_audio(
+            &mut [0.0_f32; 2],
+            2,
+            44_100,
+            &rx,
+            &HashMap::new(),
+            &mut Vec::with_capacity(MAX_VOICES),
+            1.0,
+        );
+        assert_eq!(rx.len(), 32);
     }
 
     #[test]

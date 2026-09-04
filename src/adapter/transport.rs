@@ -2,17 +2,24 @@ use super::*;
 use semver::Version;
 use std::collections::{HashMap, VecDeque};
 use std::env;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::net::{TcpListener, TcpStream};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 7777;
 const DEFAULT_PROTOCOL_VERSION: &str = "3.0.0";
 const DEFAULT_GAME_ID: &str = "gpui-tetris";
 const MAX_FRAME_PAYLOAD_BYTES: usize = 65_536;
-const MAX_RESPONSE_BUFFER_BYTES: usize = 262_144;
+const ACCEPTS_PER_POLL: usize = 16;
+const FRAMES_PER_CLIENT_POLL: usize = 64;
+const COMMANDS_PER_POLL: usize = 64;
+const READ_BYTES_PER_CLIENT_POLL: usize = 16_384;
+
+mod logging;
+mod outbound;
+use logging::WireLog;
+use outbound::Outbound;
 const MAX_CLIENTS: usize = 16;
 const BACKPRESSURE_RETRY_AFTER_MS: u64 = 16;
 
@@ -38,7 +45,7 @@ impl Default for AdapterConfig {
             idle_timeout_ms: Some(2_000),
             max_pending_commands: 64,
             observation_interval_ms: None,
-            log_path: Some("auto".to_string()),
+            log_path: None,
         }
     }
 }
@@ -118,18 +125,14 @@ impl ClientRole {
 struct ClientState {
     stream: TcpStream,
     read_buf: Vec<u8>,
-    write_buf: Vec<u8>,
+    outbound: Outbound,
     handshake_complete: bool,
     stream_observations: bool,
-    requested_mode: Option<CommandMode>,
     requested_role: RequestedRole,
     role: ClientRole,
     last_seq: Option<u64>,
     last_read_at_ms: u64,
     needs_snapshot: bool,
-    observation_buf: Option<Vec<u8>>,
-    observation_offset: usize,
-    next_observation: Option<Vec<u8>>,
     disconnect_requested: bool,
 }
 
@@ -138,18 +141,14 @@ impl ClientState {
         Self {
             stream,
             read_buf: Vec::with_capacity(4096),
-            write_buf: Vec::with_capacity(1024),
+            outbound: Outbound::default(),
             handshake_complete: false,
             stream_observations: false,
-            requested_mode: None,
             requested_role: RequestedRole::Auto,
             role: ClientRole::Observer,
             last_seq: None,
             last_read_at_ms: now_ms,
             needs_snapshot: false,
-            observation_buf: None,
-            observation_offset: 0,
-            next_observation: None,
             disconnect_requested: false,
         }
     }
@@ -171,7 +170,8 @@ pub struct SocketAdapter {
     out_seq: u64,
     pending_commands: VecDeque<PendingCommand>,
     last_observation_ts_ms: Option<u64>,
-    log_file: Option<File>,
+    log_file: Option<WireLog>,
+    clock_origin: Instant,
 }
 
 impl SocketAdapter {
@@ -189,7 +189,7 @@ impl SocketAdapter {
         listener
             .set_nonblocking(true)
             .map_err(|err| format!("adapter nonblocking listener failed: {err}"))?;
-        let log_file = open_log_file(config.log_path.as_deref());
+        let log_file = WireLog::open(config.log_path.as_deref());
         Ok(Self {
             config,
             listener,
@@ -200,6 +200,7 @@ impl SocketAdapter {
             pending_commands: VecDeque::new(),
             last_observation_ts_ms: None,
             log_file,
+            clock_origin: Instant::now(),
         })
     }
 
@@ -208,12 +209,19 @@ impl SocketAdapter {
     }
 
     pub fn poll_and_apply(&mut self, state: &mut GameState) -> bool {
-        let now_ms = now_unix_ms();
+        self.poll_and_apply_at(state, Instant::now())
+    }
+
+    pub fn poll_and_apply_at(&mut self, state: &mut GameState, now: Instant) -> bool {
+        let now_ms = now.saturating_duration_since(self.clock_origin).as_millis() as u64;
         self.accept_clients(now_ms);
         self.read_from_clients(now_ms);
 
         let mut changed = false;
-        while let Some(pending) = self.pending_commands.pop_front() {
+        for _ in 0..COMMANDS_PER_POLL {
+            let Some(pending) = self.pending_commands.pop_front() else {
+                break;
+            };
             let result = apply_protocol_command(&pending.command, state)
                 .map(|()| changed = true)
                 .map_err(|err| err.to_error());
@@ -265,9 +273,7 @@ impl SocketAdapter {
         }
 
         self.out_seq = self.out_seq.saturating_add(1);
-        let events = state.take_protocol_events();
-        let message =
-            OutMessage::Observation(Observation::from_state(self.out_seq, now_ms, state, events));
+        let message = OutMessage::Observation(Observation::from_state(self.out_seq, now_ms, state));
         let Some(encoded) = encode_message(&message) else {
             return;
         };
@@ -283,7 +289,7 @@ impl SocketAdapter {
     }
 
     fn accept_clients(&mut self, now_ms: u64) {
-        loop {
+        for _ in 0..ACCEPTS_PER_POLL {
             let accepted = self.listener.accept();
             let (stream, _) = match accepted {
                 Ok(pair) => pair,
@@ -312,13 +318,17 @@ impl SocketAdapter {
                 continue;
             };
             let mut temp = [0_u8; 4096];
-            loop {
-                match client.stream.read(&mut temp) {
+            let capacity = (MAX_FRAME_PAYLOAD_BYTES + 1).saturating_sub(client.read_buf.len());
+            let mut remaining = capacity.min(READ_BYTES_PER_CLIENT_POLL);
+            while remaining > 0 {
+                let limit = temp.len().min(remaining);
+                match client.stream.read(&mut temp[..limit]) {
                     Ok(0) => {
                         to_drop.push(id);
                         break;
                     }
                     Ok(n) => {
+                        remaining -= n;
                         client.last_read_at_ms = now_ms;
                         client.read_buf.extend_from_slice(&temp[..n]);
                         if client.read_buf.len() > MAX_FRAME_PAYLOAD_BYTES + 1 {
@@ -333,7 +343,7 @@ impl SocketAdapter {
                 }
             }
 
-            let drained = drain_lines(&mut client.read_buf);
+            let drained = drain_lines(&mut client.read_buf, FRAMES_PER_CLIENT_POLL);
             for line in drained {
                 if line.len() > MAX_FRAME_PAYLOAD_BYTES {
                     to_drop.push(id);
@@ -341,12 +351,20 @@ impl SocketAdapter {
                     frames.push((id, line));
                 }
             }
-            if client.read_buf.len() > MAX_FRAME_PAYLOAD_BYTES {
+            if client.read_buf.len() > MAX_FRAME_PAYLOAD_BYTES && !client.read_buf.contains(&b'\n')
+            {
                 to_drop.push(id);
             }
         }
 
         for (id, line) in frames {
+            if self
+                .clients
+                .get(&id)
+                .is_none_or(|client| client.disconnect_requested)
+            {
+                continue;
+            }
             self.log_wire("recv", id, &line);
             self.handle_line(id, &line);
         }
@@ -388,24 +406,8 @@ impl SocketAdapter {
                 to_drop.push(id);
                 continue;
             }
-            while !client.write_buf.is_empty() {
-                match client.stream.write(&client.write_buf) {
-                    Ok(0) => {
-                        to_drop.push(id);
-                        break;
-                    }
-                    Ok(written) => {
-                        client.write_buf.drain(..written);
-                    }
-                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
-                    Err(_) => {
-                        to_drop.push(id);
-                        break;
-                    }
-                }
-            }
-            if client.write_buf.is_empty() {
-                flush_observation(client, &mut to_drop, id);
+            if client.outbound.flush(&mut client.stream).is_err() {
+                to_drop.push(id);
             }
         }
         to_drop.sort_unstable();
@@ -506,7 +508,6 @@ impl SocketAdapter {
         if let Some(client) = self.clients.get_mut(&connection_id) {
             client.handshake_complete = true;
             client.stream_observations = hello.requested.stream_observations;
-            client.requested_mode = Some(hello.requested.command_mode);
             client.requested_role = hello.requested.role;
             client.role = assigned_role;
             client.last_seq = Some(hello.seq);
@@ -561,7 +562,7 @@ impl SocketAdapter {
     }
 
     fn handle_command(&mut self, connection_id: usize, command: CommandMessage) {
-        let seq = command.seq;
+        let seq = command.seq();
         if !self.is_handshake_complete(connection_id) {
             self.send_error(
                 connection_id,
@@ -706,29 +707,19 @@ impl SocketAdapter {
         let Some(client) = self.clients.get_mut(&connection_id) else {
             return;
         };
-        if client.write_buf.len().saturating_add(payload.len() + 1) > MAX_RESPONSE_BUFFER_BYTES {
+        if !client.outbound.response(payload) {
             client.disconnect_requested = true;
             return;
         }
-        client.write_buf.extend_from_slice(payload);
-        client.write_buf.push(b'\n');
-        self.log_wire("send", connection_id, payload);
+        self.log_wire("enqueue_response", connection_id, payload);
     }
 
     fn send_observation(&mut self, connection_id: usize, payload: &[u8]) {
         let Some(client) = self.clients.get_mut(&connection_id) else {
             return;
         };
-        let mut frame = Vec::with_capacity(payload.len() + 1);
-        frame.extend_from_slice(payload);
-        frame.push(b'\n');
-        if client.observation_buf.is_none() {
-            client.observation_buf = Some(frame);
-            client.observation_offset = 0;
-        } else {
-            client.next_observation = Some(frame);
-        }
-        self.log_wire("send", connection_id, payload);
+        client.outbound.observation(payload);
+        self.log_wire("enqueue_observation", connection_id, payload);
     }
 
     fn drop_client(&mut self, connection_id: usize) {
@@ -771,23 +762,9 @@ impl SocketAdapter {
         }
     }
 
-    fn log_wire(&mut self, direction: &str, connection_id: usize, line: &[u8]) {
-        let Some(file) = self.log_file.as_mut() else {
-            return;
-        };
-        let mut line_text = String::from_utf8_lossy(line).to_string();
-        if line_text.ends_with('\n') {
-            line_text.pop();
-        }
-        let record = serde_json::json!({
-            "ts_ms": now_unix_ms(),
-            "direction": direction,
-            "connection_id": connection_id,
-            "line": line_text
-        });
-        if let Ok(data) = serde_json::to_vec(&record) {
-            let _ = file.write_all(&data);
-            let _ = file.write_all(b"\n");
+    fn log_wire(&self, direction: &'static str, connection_id: usize, line: &[u8]) {
+        if let Some(log) = &self.log_file {
+            log.record(direction, connection_id, line);
         }
     }
 }
@@ -799,51 +776,22 @@ fn compatible_protocol_version(server: &str, client: &str) -> bool {
     )
 }
 
-fn drain_lines(buffer: &mut Vec<u8>) -> Vec<Vec<u8>> {
+fn drain_lines(buffer: &mut Vec<u8>, limit: usize) -> Vec<Vec<u8>> {
     let mut lines = Vec::new();
-    while let Some(pos) = buffer.iter().position(|byte| *byte == b'\n') {
-        let mut line = buffer.drain(..=pos).collect::<Vec<u8>>();
-        if line.last() == Some(&b'\n') {
-            line.pop();
+    let mut start = 0;
+    for (end, byte) in buffer.iter().enumerate() {
+        if *byte != b'\n' {
+            continue;
         }
-        if line.last() == Some(&b'\r') {
-            line.pop();
+        let line = &buffer[start..end];
+        lines.push(line.strip_suffix(b"\r").unwrap_or(line).to_vec());
+        start = end + 1;
+        if lines.len() == limit {
+            break;
         }
-        lines.push(line);
     }
+    buffer.drain(..start);
     lines
-}
-
-fn flush_observation(client: &mut ClientState, to_drop: &mut Vec<usize>, id: usize) {
-    loop {
-        if client.observation_buf.is_none() {
-            client.observation_buf = client.next_observation.take();
-            client.observation_offset = 0;
-        }
-        let Some(frame) = client.observation_buf.as_ref() else {
-            return;
-        };
-        match client.stream.write(&frame[client.observation_offset..]) {
-            Ok(0) => {
-                to_drop.push(id);
-                return;
-            }
-            Ok(written) => {
-                client.observation_offset += written;
-                if client.observation_offset == frame.len() {
-                    client.observation_buf = None;
-                    client.observation_offset = 0;
-                    continue;
-                }
-                return;
-            }
-            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => return,
-            Err(_) => {
-                to_drop.push(id);
-                return;
-            }
-        }
-    }
 }
 
 fn now_unix_ms() -> u64 {
@@ -854,16 +802,29 @@ fn now_unix_ms() -> u64 {
     duration.as_millis() as u64
 }
 
-fn open_log_file(path: Option<&str>) -> Option<File> {
-    let path = path?;
-    let resolved = if path == "auto" {
-        format!("/tmp/tetris-ai-adapter-{}.jsonl", now_unix_ms())
-    } else {
-        path.to_string()
-    };
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(resolved)
-        .ok()
+#[cfg(test)]
+mod framing_tests {
+    use super::*;
+    #[test]
+    fn frame_budget_preserves_crlf_and_incomplete_tail() {
+        let mut buffer = b"one\r\ntwo\nthree".to_vec();
+        assert_eq!(drain_lines(&mut buffer, 1), [b"one".to_vec()]);
+        assert_eq!(buffer, b"two\nthree");
+        assert_eq!(drain_lines(&mut buffer, 64), [b"two".to_vec()]);
+        buffer.extend_from_slice(b"!\n");
+        assert_eq!(drain_lines(&mut buffer, 64), [b"three!".to_vec()]);
+        assert!(buffer.is_empty());
+    }
+    #[test]
+    fn tiny_frame_burst_is_processed_in_bounded_batches() {
+        let mut buffer = vec![b'\n'; MAX_FRAME_PAYLOAD_BYTES];
+        assert_eq!(
+            drain_lines(&mut buffer, FRAMES_PER_CLIENT_POLL).len(),
+            FRAMES_PER_CLIENT_POLL
+        );
+        assert_eq!(
+            buffer.len(),
+            MAX_FRAME_PAYLOAD_BYTES - FRAMES_PER_CLIENT_POLL
+        );
+    }
 }

@@ -22,6 +22,8 @@ pub struct InputState {
     keyboard_down_held: bool,
     last_dir: Option<AxisDirection>,
     gilrs: Option<Gilrs>,
+    active_since: std::time::SystemTime,
+    was_active: bool,
     gamepad_id: Option<GamepadId>,
     controller_left_button: bool,
     controller_right_button: bool,
@@ -34,31 +36,14 @@ pub struct InputState {
     controller_down_held: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct InputAction {
-    pub action: GameAction,
-    pub record: bool,
-}
-
-impl InputAction {
-    fn recorded(action: GameAction) -> Self {
-        Self {
-            action,
-            record: true,
-        }
-    }
-
-    fn silent(action: GameAction) -> Self {
-        Self {
-            action,
-            record: false,
-        }
-    }
-}
+pub type InputAction = GameAction;
 
 impl InputState {
     pub fn new() -> Self {
-        let gilrs = Gilrs::new().ok();
+        Self::with_controller(Gilrs::new().ok())
+    }
+
+    fn with_controller(gilrs: Option<Gilrs>) -> Self {
         let gamepad_id = gilrs
             .as_ref()
             .and_then(|gilrs| gilrs.gamepads().next().map(|(id, _)| id));
@@ -76,6 +61,8 @@ impl InputState {
             keyboard_down_held: false,
             last_dir: None,
             gilrs,
+            active_since: std::time::SystemTime::UNIX_EPOCH,
+            was_active: false,
             gamepad_id,
             controller_left_button: false,
             controller_right_button: false,
@@ -117,12 +104,19 @@ impl InputState {
         self.clear_controller_state();
     }
 
-    pub fn poll_controller_into(&mut self, out: &mut Vec<InputAction>) {
+    pub fn poll_controller_into(&mut self, active: bool, out: &mut Vec<InputAction>) {
         out.clear();
+        if active && !self.was_active {
+            self.active_since = std::time::SystemTime::now();
+        }
+        self.was_active = active;
         let Some(mut gilrs) = self.gilrs.take() else {
             return;
         };
-        while let Some(event) = gilrs.next_event() {
+        for _ in 0..64 {
+            let Some(event) = gilrs.next_event() else {
+                break;
+            };
             if self.gamepad_id.is_none() {
                 self.gamepad_id = Some(event.id);
             }
@@ -135,14 +129,16 @@ impl InputState {
                 continue;
             }
 
+            if matches!(event.event, EventType::Disconnected) {
+                self.clear_controller_state();
+                self.gamepad_id = None;
+                continue;
+            }
+            if !active || event.time < self.active_since {
+                continue;
+            }
             match event.event {
                 EventType::Connected => {}
-                EventType::Disconnected => {
-                    if self.gamepad_id == Some(event.id) {
-                        self.clear_controller_state();
-                        self.gamepad_id = None;
-                    }
-                }
                 EventType::ButtonPressed(button, _) => {
                     out.extend(self.handle_controller_button(button, true));
                 }
@@ -156,6 +152,9 @@ impl InputState {
             }
         }
         self.gilrs = Some(gilrs);
+        if !active {
+            self.clear_focus_state();
+        }
     }
 
     pub fn apply_repeats_into(
@@ -186,7 +185,7 @@ impl InputState {
                     .unwrap_or(usize::MAX)
                     .min(MAX_REPEAT_ACTIONS_PER_TICK)
                 {
-                    out.push(InputAction::recorded(GameAction::MoveLeft));
+                    out.push(GameAction::MoveLeft);
                 }
             }
             Some(AxisDirection::Right) => {
@@ -195,7 +194,7 @@ impl InputState {
                     .unwrap_or(usize::MAX)
                     .min(MAX_REPEAT_ACTIONS_PER_TICK)
                 {
-                    out.push(InputAction::recorded(GameAction::MoveRight));
+                    out.push(GameAction::MoveRight);
                 }
             }
             None => {}
@@ -207,7 +206,7 @@ impl InputState {
                 .tick(elapsed_ms, &self.soft_drop_repeat_config);
             let remaining = MAX_REPEAT_ACTIONS_PER_TICK.saturating_sub(out.len());
             for _ in 0..usize::try_from(count).unwrap_or(usize::MAX).min(remaining) {
-                out.push(InputAction::recorded(GameAction::SoftDrop));
+                out.push(GameAction::SoftDrop);
             }
         }
     }
@@ -218,14 +217,12 @@ impl InputState {
             Button::DPadLeft => self.controller_left_button = pressed,
             Button::DPadRight => self.controller_right_button = pressed,
             Button::DPadDown => self.controller_down_button = pressed,
-            Button::South if pressed => actions.push(InputAction::silent(GameAction::RotateCw)),
-            Button::East if pressed => actions.push(InputAction::silent(GameAction::RotateCcw)),
-            Button::West if pressed => actions.push(InputAction::silent(GameAction::Hold)),
-            Button::North if pressed => actions.push(InputAction::silent(GameAction::HardDrop)),
-            Button::Start if pressed => actions.push(InputAction::silent(GameAction::Pause)),
-            Button::Select | Button::Mode if pressed => {
-                actions.push(InputAction::silent(GameAction::Restart))
-            }
+            Button::South if pressed => actions.push(GameAction::RotateCw),
+            Button::East if pressed => actions.push(GameAction::RotateCcw),
+            Button::West if pressed => actions.push(GameAction::Hold),
+            Button::North if pressed => actions.push(GameAction::HardDrop),
+            Button::Start if pressed => actions.push(GameAction::Pause),
+            Button::Select | Button::Mode if pressed => actions.push(GameAction::Restart),
             _ => {}
         }
 
@@ -257,7 +254,7 @@ impl InputState {
         if left != self.left_repeat.is_held() {
             if left {
                 if self.left_repeat.press() {
-                    out.push(InputAction::recorded(GameAction::MoveLeft));
+                    out.push(GameAction::MoveLeft);
                 }
             } else {
                 self.left_repeat.release();
@@ -267,7 +264,7 @@ impl InputState {
         if right != self.right_repeat.is_held() {
             if right {
                 if self.right_repeat.press() {
-                    out.push(InputAction::recorded(GameAction::MoveRight));
+                    out.push(GameAction::MoveRight);
                 }
             } else {
                 self.right_repeat.release();
@@ -317,7 +314,7 @@ impl InputState {
         if down != self.down_repeat.is_held() {
             if down {
                 if self.down_repeat.press() {
-                    out.push(InputAction::recorded(GameAction::SoftDrop));
+                    out.push(GameAction::SoftDrop);
                 }
             } else {
                 self.down_repeat.release();
@@ -332,18 +329,29 @@ mod tests {
     use gpui_tetris::game::input::GameAction;
 
     #[test]
+    fn focus_loss_clears_keyboard_and_controller_repeats() {
+        let mut input = InputState::with_controller(None);
+        input.set_keyboard_left(true);
+        input.handle_controller_button(gilrs::Button::DPadDown, true);
+        input.clear_focus_state();
+        let mut actions = Vec::new();
+        input.apply_repeats_into(1000, true, &mut actions);
+        assert!(actions.is_empty());
+        assert_eq!(input.set_keyboard_left(true), [GameAction::MoveLeft]);
+    }
+
+    #[test]
     fn keyboard_press_emits_single_move() {
-        let mut input = InputState::new();
+        let mut input = InputState::with_controller(None);
         let actions = input.set_keyboard_left(true);
 
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].action, GameAction::MoveLeft);
-        assert!(actions[0].record);
+        assert_eq!(actions[0], GameAction::MoveLeft);
     }
 
     #[test]
     fn repeat_emits_after_das_and_arr() {
-        let mut input = InputState::new();
+        let mut input = InputState::with_controller(None);
         let _ = input.set_keyboard_left(true);
 
         let mut actions = Vec::new();
@@ -352,12 +360,12 @@ mod tests {
 
         input.apply_repeats_into(50, true, &mut actions);
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].action, GameAction::MoveLeft);
+        assert_eq!(actions[0], GameAction::MoveLeft);
     }
 
     #[test]
     fn repeat_output_is_bounded_after_a_long_stall() {
-        let mut input = InputState::new();
+        let mut input = InputState::with_controller(None);
         let _ = input.set_keyboard_left(true);
         let _ = input.set_keyboard_down(true);
 

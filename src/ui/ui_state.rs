@@ -1,6 +1,7 @@
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
+#[cfg(test)]
 use gpui_tetris::game::state::GameState;
 use std::time::Instant;
 
@@ -10,18 +11,15 @@ use gpui_tetris::game::board::{BOARD_HEIGHT, BOARD_WIDTH};
 const BOARD_CELLS: usize = BOARD_WIDTH * BOARD_HEIGHT;
 
 pub struct UiState {
-    pub last_action: Option<GameAction>,
-    pub state: GameState,
-    pub started: bool,
+    pub runtime: gpui_tetris::runtime::Runtime,
     pub show_settings: bool,
     pub sfx_volume: f32,
     pub sfx_muted: bool,
     pub audio: Option<AudioEngine>,
     pub(crate) flash_mask: [bool; BOARD_CELLS],
-    pub(crate) active_mask: [bool; BOARD_CELLS],
     pub(crate) ghost_mask: [bool; BOARD_CELLS],
     pub(crate) panel_labels: PanelLabels,
-    labels_dirty: LabelDirty,
+    panel_snapshot: Option<PanelSnapshot>,
     pub(crate) preview_cache: PreviewCache,
     pub(crate) board_cache: [Option<TetrominoType>; BOARD_CELLS],
     board_revision: u64,
@@ -31,37 +29,22 @@ pub struct UiState {
 
 #[derive(Default)]
 pub struct PanelLabels {
-    pub score: String,
-    pub level: String,
-    pub lines: String,
-    pub status: String,
-    pub ruleset: String,
-    pub hold: String,
+    pub score: gpui_kit::SharedString,
+    pub level: gpui_kit::SharedString,
+    pub lines: gpui_kit::SharedString,
+    pub status: gpui_kit::SharedString,
+    pub ruleset: gpui_kit::SharedString,
+    pub hold: gpui_kit::SharedString,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct LabelDirty {
-    stats: bool,
-    status: bool,
-    ruleset: bool,
-    hold: bool,
-}
-
-impl LabelDirty {
-    fn any(&self) -> bool {
-        self.stats || self.status || self.ruleset || self.hold
-    }
-
-    fn mark_game_dirty(&mut self) {
-        self.stats = true;
-        self.status = true;
-        self.ruleset = true;
-        self.hold = true;
-    }
-
-    fn clear(&mut self) {
-        *self = Self::default();
-    }
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct PanelSnapshot {
+    score: u32,
+    level: u32,
+    lines: u32,
+    status: &'static str,
+    ruleset: &'static str,
+    can_hold: bool,
 }
 
 pub const TITLE_HINT: &str = "Press Space or Enter to start";
@@ -76,24 +59,25 @@ pub const ONBOARDING_HINTS: [&str; 3] = [
 const PREVIEW_SIZE: usize = 4;
 
 impl UiState {
+    #[cfg(test)]
     pub fn new(state: GameState, audio: Option<AudioEngine>) -> Self {
+        Self::with_runtime(gpui_tetris::runtime::Runtime::new(state, None), audio)
+    }
+
+    pub fn with_runtime(
+        runtime: gpui_tetris::runtime::Runtime,
+        audio: Option<AudioEngine>,
+    ) -> Self {
         let mut ui = Self {
-            last_action: None,
-            state,
-            started: false,
+            runtime,
             show_settings: false,
             sfx_volume: DEFAULT_SFX_VOLUME,
             sfx_muted: false,
             audio,
             flash_mask: [false; BOARD_CELLS],
-            active_mask: [false; BOARD_CELLS],
             ghost_mask: [false; BOARD_CELLS],
             panel_labels: PanelLabels::default(),
-            labels_dirty: {
-                let mut dirty = LabelDirty::default();
-                dirty.mark_game_dirty();
-                dirty
-            },
+            panel_snapshot: None,
             preview_cache: PreviewCache::new(),
             board_cache: [None; BOARD_CELLS],
             board_revision: 0,
@@ -107,55 +91,36 @@ impl UiState {
     }
 
     pub fn receive_action(&mut self, action: GameAction) {
-        self.apply_action(action, true);
-    }
-
-    pub fn apply_action(&mut self, action: GameAction, record: bool) {
-        if record {
-            self.last_action = Some(action);
-        }
-        if !self.started {
-            self.start_game();
-            if matches!(
-                action,
-                GameAction::Pause | GameAction::Restart | GameAction::HardDrop
-            ) {
-                return;
-            }
-        }
         if self.show_settings {
             return;
         }
-
-        self.state.apply_action(action);
-        if action == GameAction::Restart {
-            self.started = true;
-        }
-        self.labels_dirty.mark_game_dirty();
+        self.runtime.apply_action(action);
     }
 
     pub fn start_game(&mut self) {
-        self.started = true;
+        self.runtime.start();
         self.show_settings = false;
-        self.state.reset();
-        self.state.paused = false;
-        self.labels_dirty.mark_game_dirty();
         self.active_snapshot = None;
         self.active_anim = None;
     }
 
     pub fn toggle_settings(&mut self) {
         self.show_settings = !self.show_settings;
-        if self.show_settings && !self.state.game_over {
-            self.state.paused = true;
+        if self.show_settings {
+            self.runtime.pause();
         }
-        self.labels_dirty.mark_game_dirty();
+    }
+
+    pub fn sync_lifecycle(&mut self) {
+        // Remote restart/resume is authoritative; a UI overlay cannot freeze a playable game.
+        if self.runtime.playable() {
+            self.show_settings = false;
+        }
     }
 
     pub fn close_settings(&mut self) {
         if self.show_settings {
             self.show_settings = false;
-            self.labels_dirty.mark_game_dirty();
         }
     }
 
@@ -188,17 +153,20 @@ impl UiState {
     }
 
     pub fn can_accept_game_input(&self) -> bool {
-        self.started && !self.show_settings && !self.state.paused && !self.state.game_over
+        self.runtime.started()
+            && !self.show_settings
+            && !self.runtime.state().paused
+            && !self.runtime.state().game_over
     }
 
     pub fn status_label(&self) -> &'static str {
-        if !self.started {
+        if !self.runtime.started() {
             "Ready"
-        } else if self.state.game_over {
+        } else if self.runtime.state().game_over {
             "Game Over"
         } else if self.show_settings {
             "Settings"
-        } else if self.state.paused {
+        } else if self.runtime.state().paused {
             "Paused"
         } else {
             "Playing"
@@ -206,7 +174,7 @@ impl UiState {
     }
 
     pub fn ruleset_label(&self) -> &'static str {
-        if self.state.is_classic_ruleset() {
+        if self.runtime.state().is_classic_ruleset() {
             "Classic"
         } else {
             "Modern"
@@ -223,7 +191,6 @@ impl UiState {
 
     pub fn clear_render_masks(&mut self) {
         self.flash_mask.fill(false);
-        self.active_mask.fill(false);
         self.ghost_mask.fill(false);
     }
 
@@ -303,57 +270,58 @@ impl UiState {
     }
 
     pub fn sync_panel_labels(&mut self) {
-        if !self.labels_dirty.any() {
-            return;
+        let state = self.runtime.state();
+        let next = PanelSnapshot {
+            score: state.score,
+            level: state.level,
+            lines: state.lines,
+            status: self.status_label(),
+            ruleset: self.ruleset_label(),
+            can_hold: state.can_hold,
+        };
+        let old = self.panel_snapshot;
+        if old.is_none_or(|old| old.score != next.score) {
+            self.panel_labels.score = format!("Score: {}", next.score).into();
         }
-        self.update_panel_labels();
-        self.labels_dirty.clear();
-    }
-
-    pub fn mark_game_dirty(&mut self) {
-        self.labels_dirty.mark_game_dirty();
+        if old.is_none_or(|old| old.level != next.level) {
+            self.panel_labels.level = format!("Level: {}", next.level).into();
+        }
+        if old.is_none_or(|old| old.lines != next.lines) {
+            self.panel_labels.lines = format!("Lines: {}", next.lines).into();
+        }
+        if old.is_none_or(|old| old.status != next.status) {
+            self.panel_labels.status = format!("Status: {}", next.status).into();
+        }
+        if old.is_none_or(|old| old.ruleset != next.ruleset) {
+            self.panel_labels.ruleset = format!("Rules: {}", next.ruleset).into();
+        }
+        if old.is_none_or(|old| old.can_hold != next.can_hold) {
+            self.panel_labels.hold =
+                format!("Hold: {}", if next.can_hold { "Ready" } else { "Used" }).into();
+        }
+        self.panel_snapshot = Some(next);
     }
 
     pub fn sync_board_cache(&mut self) {
-        let revision = self.state.board_revision();
+        let revision = self.runtime.state().board_revision();
         if self.board_revision == revision {
             return;
         }
-        for (y, row) in self.state.board.cells.iter().enumerate() {
+        for (y, row) in self.runtime.state().board.cells.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
                 let idx = y * BOARD_WIDTH + x;
-                self.board_cache[idx] = if cell.filled { cell.kind } else { None };
+                self.board_cache[idx] = cell.kind;
             }
         }
         self.board_revision = revision;
     }
 
-    fn update_panel_labels(&mut self) {
-        if self.labels_dirty.stats {
-            self.panel_labels.score = format!("Score: {}", self.state.score);
-            self.panel_labels.level = format!("Level: {}", self.state.level);
-            self.panel_labels.lines = format!("Lines: {}", self.state.lines);
-        }
-        if self.labels_dirty.status {
-            self.panel_labels.status = format!("Status: {}", self.status_label());
-        }
-        if self.labels_dirty.ruleset {
-            self.panel_labels.ruleset = format!("Rules: {}", self.ruleset_label());
-        }
-        if self.labels_dirty.hold {
-            self.panel_labels.hold = format!(
-                "Hold: {}",
-                if self.state.can_hold { "Ready" } else { "Used" }
-            );
-        }
-    }
-
     fn snapshot_active(&self) -> ActiveSnapshot {
         ActiveSnapshot {
-            kind: self.state.active.kind,
-            x: self.state.active.x,
-            y: self.state.active.y,
-            rotation: self.state.active.rotation,
+            kind: self.runtime.state().active.kind,
+            x: self.runtime.state().active.x,
+            y: self.runtime.state().active.y,
+            rotation: self.runtime.state().active.rotation,
         }
     }
 }
@@ -427,6 +395,7 @@ mod tests {
     use super::UiState;
     use gpui_tetris::game::input::GameAction;
     use gpui_tetris::game::pieces::TetrominoType;
+    #[cfg(test)]
     use gpui_tetris::game::state::GameState;
 
     #[test]
@@ -436,21 +405,21 @@ mod tests {
 
         ui.start_game();
 
-        assert!(ui.started);
+        assert!(ui.runtime.started());
         assert!(!ui.show_settings);
-        assert!(!ui.state.paused);
+        assert!(!ui.runtime.state().paused);
     }
 
     #[test]
     fn toggle_settings_pauses_when_opened() {
         let state = GameState::new(1, Default::default());
         let mut ui = UiState::new(state, None);
-        ui.started = true;
+        ui.start_game();
 
         ui.toggle_settings();
 
         assert!(ui.show_settings);
-        assert!(ui.state.paused);
+        assert!(ui.runtime.state().paused);
     }
 
     #[test]
@@ -478,6 +447,18 @@ mod tests {
     }
 
     #[test]
+    fn remote_restart_closes_settings_and_restores_authoritative_playability() {
+        let mut ui = UiState::new(GameState::new(1, Default::default()), None);
+        ui.start_game();
+        ui.toggle_settings();
+        assert!(ui.runtime.state().paused);
+        ui.runtime.apply_action(GameAction::Restart);
+        ui.sync_lifecycle();
+        assert!(!ui.show_settings);
+        assert!(ui.can_accept_game_input());
+    }
+
+    #[test]
     fn settings_block_game_actions_from_component_interactions() {
         let state = GameState::new(1, Default::default());
         let mut ui = UiState::new(state, None);
@@ -488,17 +469,7 @@ mod tests {
         ui.receive_action(GameAction::MoveLeft);
 
         assert_eq!(ui.active_snapshot(), active_before);
-        assert!(ui.state.paused);
-    }
-
-    #[test]
-    fn receive_action_records_last_action() {
-        let state = GameState::new(1, Default::default());
-        let mut ui = UiState::new(state, None);
-
-        ui.receive_action(GameAction::Pause);
-
-        assert_eq!(ui.last_action, Some(GameAction::Pause));
+        assert!(ui.runtime.state().paused);
     }
 
     #[test]
@@ -519,10 +490,10 @@ mod tests {
     fn title_input_starts_game_for_mapped_actions() {
         let state = GameState::new(1, Default::default());
         let mut ui = UiState::new(state, None);
-        assert!(!ui.started);
+        assert!(!ui.runtime.started());
 
         ui.receive_action(GameAction::MoveLeft);
 
-        assert!(ui.started);
+        assert!(ui.runtime.started());
     }
 }

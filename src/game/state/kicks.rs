@@ -50,3 +50,29 @@ pub(crate) fn srs_kicks(
         _ => &JLSTZ_0_R,
     }
 }
+
+/// Resolve a rotation using the same ordered kick candidates for play and planning.
+pub(crate) fn rotated_piece(
+    board: &crate::game::board::Board,
+    piece: crate::game::pieces::Tetromino,
+    clockwise: bool,
+) -> Option<crate::game::pieces::Tetromino> {
+    let rotation = if clockwise {
+        piece.rotation.cw()
+    } else {
+        piece.rotation.ccw()
+    };
+    srs_kicks(piece.kind, piece.rotation, rotation)
+        .iter()
+        .find_map(|(dx, dy)| {
+            let next = crate::game::pieces::Tetromino {
+                x: piece.x + dx,
+                y: piece.y + dy,
+                rotation,
+                ..piece
+            };
+            board
+                .can_place(&next, next.x, next.y, next.rotation)
+                .then_some(next)
+        })
+}

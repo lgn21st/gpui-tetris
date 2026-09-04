@@ -13,7 +13,7 @@ impl TetrisView {
         let mut sync_volume = false;
         match event.keystroke.key.as_str() {
             "enter" | "return" => {
-                if !self.ui.started {
+                if !self.ui.runtime.started() {
                     self.ui.start_game();
                 }
             }
@@ -39,7 +39,7 @@ impl TetrisView {
                 self.ui.close_settings();
             }
             "left" => {
-                if !self.ui.started {
+                if !self.ui.runtime.started() {
                     self.ui.start_game();
                     return;
                 }
@@ -50,7 +50,7 @@ impl TetrisView {
                 self.apply_input_actions(&actions);
             }
             "right" => {
-                if !self.ui.started {
+                if !self.ui.runtime.started() {
                     self.ui.start_game();
                     return;
                 }
@@ -61,7 +61,7 @@ impl TetrisView {
                 self.apply_input_actions(&actions);
             }
             "down" => {
-                if !self.ui.started {
+                if !self.ui.runtime.started() {
                     self.ui.start_game();
                     return;
                 }
@@ -125,7 +125,7 @@ impl TetrisView {
 
     pub(super) fn apply_input_actions(&mut self, actions: &[InputAction]) {
         for entry in actions {
-            self.ui.apply_action(entry.action, entry.record);
+            self.ui.receive_action(*entry);
         }
     }
 

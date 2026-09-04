@@ -43,27 +43,13 @@ fn send_raw_line(stream: &mut TcpStream, bytes: &[u8]) {
 }
 
 fn try_read_json_line(stream: &mut TcpStream) -> Option<Value> {
-    let mut buf = Vec::new();
-    loop {
-        let mut byte = [0_u8; 1];
-        match stream.read(&mut byte) {
-            Ok(0) => return None,
-            Ok(_) => {
-                if byte[0] == b'\n' {
-                    break;
-                }
-                buf.push(byte[0]);
-            }
-            Err(err)
-                if err.kind() == std::io::ErrorKind::WouldBlock
-                    || err.kind() == std::io::ErrorKind::TimedOut =>
-            {
-                return None;
-            }
-            Err(_) => return None,
-        }
-    }
-    serde_json::from_slice(&buf).ok()
+    // Do not consume partial frames: a timeout must not lose a prefix.
+    let mut bytes = [0_u8; 65_537];
+    let n = stream.peek(&mut bytes).ok()?;
+    let end = bytes[..n].iter().position(|byte| *byte == b'\n')?;
+    let mut frame = vec![0; end + 1];
+    stream.read_exact(&mut frame).ok()?;
+    serde_json::from_slice(&frame[..end]).ok()
 }
 
 fn wait_for_type(
@@ -726,7 +712,8 @@ fn lock_event_reports_actual_clear_and_score() {
     use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
     for x in 0..BOARD_WIDTH {
         if !(3..=6).contains(&x) {
-            state.board.cells[BOARD_HEIGHT - 1][x].filled = true;
+            state.board.cells[BOARD_HEIGHT - 1][x].kind =
+                Some(gpui_tetris::game::pieces::TetrominoType::I);
             state.board.cells[BOARD_HEIGHT - 1][x].kind = Some(TetrominoType::O);
         }
     }
@@ -750,7 +737,7 @@ fn lock_event_reports_actual_clear_and_score() {
 }
 
 #[test]
-fn events_are_ordered_bounded_and_never_null() {
+fn events_belong_only_to_the_observed_transition() {
     use gpui_tetris::game::input::GameAction;
 
     let (mut adapter, mut state, addr) = test_adapter();
@@ -764,7 +751,8 @@ fn events_are_ordered_bounded_and_never_null() {
     }
     let observation = wait_for_observation(&mut client, &mut adapter, &mut state);
     let events = observation["events"].as_array().expect("events array");
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 1);
+    assert_eq!(observation["logical_step"], state.logical_step);
     assert!(events.iter().all(|event| event["locked"] == true));
 }
 
@@ -917,18 +905,17 @@ fn observer_is_not_disconnected_by_inbound_idle_timeout() {
     let (mut adapter, mut state, addr) = test_adapter_with_config(AdapterConfig {
         host: "127.0.0.1".to_string(),
         port: 0,
-        idle_timeout_ms: Some(20),
+        idle_timeout_ms: Some(10_000),
         log_path: None,
         ..AdapterConfig::default()
     });
     let mut controller = connect(&addr);
-    let mut observer = connect(&addr);
     send_json_line(&mut controller, hello(1));
     let _ = wait_for_type(&mut controller, &mut adapter, &mut state, "welcome");
+    let mut observer = connect(&addr);
     send_json_line(&mut observer, hello_with_role(1, "action", "observer"));
     let _ = wait_for_type(&mut observer, &mut adapter, &mut state, "welcome");
-    thread::sleep(Duration::from_millis(30));
-    adapter.poll_and_apply(&mut state);
+    adapter.poll_and_apply_at(&mut state, Instant::now() + Duration::from_secs(11));
 
     send_json_line(
         &mut observer,

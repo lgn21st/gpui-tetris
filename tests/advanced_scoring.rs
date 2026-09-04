@@ -53,11 +53,8 @@ fn t_spin_full_no_line_scores_and_breaks_back_to_back() {
 
     // Occupy three corners around the T center (x+1, y+1),
     // including both front corners for a full T-spin.
-    state.board.cells[BOARD_HEIGHT - 3][5].filled = true;
     state.board.cells[BOARD_HEIGHT - 3][5].kind = Some(TetrominoType::L);
-    state.board.cells[BOARD_HEIGHT - 1][5].filled = true;
     state.board.cells[BOARD_HEIGHT - 1][5].kind = Some(TetrominoType::L);
-    state.board.cells[BOARD_HEIGHT - 3][3].filled = true;
     state.board.cells[BOARD_HEIGHT - 3][3].kind = Some(TetrominoType::L);
 
     state.apply_action(GameAction::HardDrop);
@@ -101,11 +98,8 @@ fn t_spin_mini_no_line_scores_less() {
     state.active = Tetromino::new(TetrominoType::T, 3, BOARD_HEIGHT as i32 - 3);
     state.active.rotation = Rotation::East;
 
-    state.board.cells[BOARD_HEIGHT - 3][3].filled = true;
     state.board.cells[BOARD_HEIGHT - 3][3].kind = Some(TetrominoType::L);
-    state.board.cells[BOARD_HEIGHT - 1][3].filled = true;
     state.board.cells[BOARD_HEIGHT - 1][3].kind = Some(TetrominoType::L);
-    state.board.cells[BOARD_HEIGHT - 1][5].filled = true;
     state.board.cells[BOARD_HEIGHT - 1][5].kind = Some(TetrominoType::L);
 
     state.apply_action(GameAction::HardDrop);

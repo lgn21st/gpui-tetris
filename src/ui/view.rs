@@ -1,13 +1,13 @@
 use gpui_kit::component::slider::{SliderEvent, SliderState};
 use gpui_kit::{
-    Context, FocusHandle, IntoElement, MouseButton, Render, Subscription, Window, div,
+    Context, FocusHandle, IntoElement, MouseButton, Render, Subscription, Task, Window, div,
     linear_color_stop, linear_gradient, prelude::*, px,
 };
 use gpui_tetris::adapter::SocketAdapter;
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
 use gpui_tetris::game::state::{GameConfig, GameState};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::ui::input::{InputAction, InputState};
 use crate::ui::render::{
@@ -19,13 +19,11 @@ use crate::ui::ui_state::UiState;
 mod events;
 mod settings;
 
-const MAX_CATCH_UP_STEPS: u64 = 15;
-
 pub struct TetrisView {
     ui: UiState,
-    adapter: Option<SocketAdapter>,
-    last_tick: Option<Instant>,
-    tick_accumulator_ms: u64,
+    runtime_task: Option<Task<()>>,
+    activation_subscription: Option<Subscription>,
+    focus_initialized: bool,
     focus_handle: FocusHandle,
     input: InputState,
     was_focused: bool,
@@ -51,10 +49,7 @@ impl TetrisView {
             eprintln!("adapter listening on tcp://{addr}");
         }
         let focus_handle = cx.focus_handle();
-        let mut ui = UiState::new(state, audio);
-        if adapter.is_some() {
-            ui.start_game();
-        }
+        let ui = UiState::with_runtime(gpui_tetris::runtime::Runtime::new(state, adapter), audio);
         let volume_slider = cx.new(|_| {
             SliderState::new()
                 .min(0.0)
@@ -72,9 +67,9 @@ impl TetrisView {
             });
         Self {
             ui,
-            adapter,
-            last_tick: None,
-            tick_accumulator_ms: 0,
+            runtime_task: None,
+            activation_subscription: None,
+            focus_initialized: false,
             focus_handle,
             input: InputState::new(),
             was_focused: false,
@@ -97,8 +92,32 @@ impl TetrisView {
 
 impl Render for TetrisView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.last_tick.is_none() {
+        if !self.focus_initialized {
+            self.focus_initialized = true;
+            self.activation_subscription =
+                Some(cx.observe_window_activation(window, |view, window, _| {
+                    view.update_focus(window);
+                }));
             self.focus_handle.focus(window, cx);
+            self.runtime_task = Some(cx.spawn_in(window, async move |view, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(8))
+                        .await;
+                    let result = cx.update(|window, cx| {
+                        view.update(cx, |view, cx| {
+                            view.update_focus(window);
+                            view.advance_runtime(Instant::now());
+                            // Kit's root can retain its rendered subtree until the window is dirty.
+                            window.refresh();
+                            cx.notify();
+                        })
+                    });
+                    if !matches!(result, Ok(Ok(()))) {
+                        break;
+                    }
+                }
+            }));
         }
         if self.settings_slider_needs_sync {
             self.sync_volume_slider(window, cx);
@@ -108,19 +127,16 @@ impl Render for TetrisView {
         let layout = RenderLayout::new(scale);
         let now = Instant::now();
         self.update_focus(window);
-        self.advance_frame(now);
 
-        window.request_animation_frame();
-        self.play_sound_events();
         self.ui.sync_panel_labels();
 
         let board = render_board(&mut self.ui, &layout, now);
         let panel = render_panel(&mut self.ui, &layout);
         let overlay = render_overlay(&OverlayState {
-            started: self.ui.started,
+            started: self.ui.runtime.started(),
             show_settings: self.ui.show_settings,
-            paused: self.ui.state.paused,
-            game_over: self.ui.state.game_over,
+            paused: self.ui.runtime.state().paused,
+            game_over: self.ui.runtime.state().game_over,
             scale,
         });
         let game_content = div()
@@ -156,7 +172,7 @@ impl Render for TetrisView {
 
 impl TetrisView {
     fn play_sound_events(&mut self) {
-        let events = self.ui.state.take_sound_events();
+        let events = self.ui.runtime.drain_sounds();
         if let Some(audio) = &self.ui.audio {
             for event in events {
                 audio.play(event);
@@ -165,7 +181,7 @@ impl TetrisView {
     }
 
     fn update_focus(&mut self, window: &Window) -> bool {
-        let focused = self.focus_handle.is_focused(window);
+        let focused = window.is_window_active() && self.focus_handle.is_focused(window);
         if self.was_focused && !focused {
             self.handle_focus_lost();
         }
@@ -173,46 +189,22 @@ impl TetrisView {
         focused
     }
 
-    fn advance_frame(&mut self, now: Instant) {
-        self.input.poll_controller_into(&mut self.input_actions);
+    fn advance_runtime(&mut self, now: Instant) {
+        self.input
+            .poll_controller_into(self.was_focused, &mut self.input_actions);
         self.apply_buffered_actions();
-        if let Some(adapter) = self.adapter.as_mut()
-            && adapter.poll_and_apply(&mut self.ui.state)
-        {
-            self.ui.mark_game_dirty();
-        }
-
-        if let Some(prev) = self.last_tick {
-            let elapsed_ms = now.duration_since(prev).as_millis() as u64;
-            if elapsed_ms > 0 && self.ui.started && !self.ui.show_settings {
-                let step_ms = self.ui.state.tick_ms.max(1);
-                let elapsed_ms = bounded_elapsed_ms(elapsed_ms, step_ms);
-                self.tick_accumulator_ms = self.tick_accumulator_ms.saturating_add(elapsed_ms);
-                while self.tick_accumulator_ms >= step_ms {
-                    self.ui.state.tick(step_ms, false);
-                    self.ui.mark_game_dirty();
-                    self.input.apply_repeats_into(
-                        step_ms,
-                        self.ui.can_accept_game_input(),
-                        &mut self.input_actions,
-                    );
-                    self.apply_buffered_actions();
-                    self.tick_accumulator_ms -= step_ms;
-                }
-            } else {
-                self.tick_accumulator_ms = 0;
-            }
+        let active = self.was_focused;
+        let input = &mut self.input;
+        self.ui.runtime.pump(now, |ms, playable, out| {
+            input.apply_repeats_into(ms, active && playable, out);
+        });
+        self.ui.sync_lifecycle();
+        if !self.ui.can_accept_game_input() {
+            self.input.clear_focus_state();
         }
         self.ui.update_active_animation(now);
-        if let Some(adapter) = self.adapter.as_mut() {
-            adapter.emit_observation(&mut self.ui.state);
-        }
-        self.last_tick = Some(now);
+        self.play_sound_events();
     }
-}
-
-fn bounded_elapsed_ms(elapsed_ms: u64, step_ms: u64) -> u64 {
-    elapsed_ms.min(step_ms.saturating_mul(MAX_CATCH_UP_STEPS))
 }
 
 fn compute_scale(window: &Window) -> f32 {
@@ -221,15 +213,4 @@ fn compute_scale(window: &Window) -> f32 {
     let height = (viewport.height / px(1.0)).max(1.0);
     let scale = (width / WINDOW_WIDTH).min(height / WINDOW_HEIGHT);
     scale.clamp(MIN_SCALE, 4.0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{MAX_CATCH_UP_STEPS, bounded_elapsed_ms};
-
-    #[test]
-    fn frame_delta_is_bounded_to_avoid_unbounded_catch_up() {
-        assert_eq!(bounded_elapsed_ms(u64::MAX, 16), 16 * MAX_CATCH_UP_STEPS);
-        assert_eq!(bounded_elapsed_ms(15, 16), 15);
-    }
 }

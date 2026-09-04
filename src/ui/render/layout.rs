@@ -61,8 +61,10 @@ pub fn render_board(
     now: std::time::Instant,
 ) -> impl IntoElement + use<> {
     ui.sync_board_cache();
-    let show_active = !ui.state.is_line_clear_active();
-    let show_ghost = show_active && !ui.state.is_grounded() && ui.state.active_moved_since_spawn;
+    let show_active = !ui.runtime.state().is_line_clear_active();
+    let show_ghost = show_active
+        && !ui.runtime.state().is_grounded()
+        && ui.runtime.state().active_moved_since_spawn;
     let cols = BOARD_WIDTH as i32;
     let rows = BOARD_HEIGHT as i32;
     ui.clear_render_masks();
@@ -74,14 +76,14 @@ pub fn render_board(
         }
     };
 
-    if ui.state.landing_flash_active() {
-        for (x, y) in ui.state.last_lock_cells.iter() {
+    if ui.runtime.state().landing_flash_active() {
+        for (x, y) in ui.runtime.state().last_lock_cells.iter() {
             set_mask(&mut ui.flash_mask, *x, *y);
         }
     }
 
     if show_ghost {
-        for (x, y) in ui.state.ghost_blocks().iter() {
+        for (x, y) in ui.runtime.state().ghost_blocks().iter() {
             set_mask(&mut ui.ghost_mask, *x, *y);
         }
     }
@@ -97,7 +99,7 @@ pub fn render_board(
             let is_flash = ui.flash_mask[idx];
 
             if show_ghost && ui.ghost_mask[idx] {
-                cell_kind = Some(ui.state.active.kind);
+                cell_kind = Some(ui.runtime.state().active.kind);
                 is_ghost = true;
             }
 
@@ -126,8 +128,10 @@ pub fn render_board(
         ))
         .child(div().flex().flex_col().children(rows))
         .child(render_active_overlay(ui, layout, show_active, now))
-        .child(render_line_clear_flash(ui.state.line_clear_timer_ms > 0))
-        .child(render_game_over_tint(ui.state.game_over))
+        .child(render_line_clear_flash(
+            ui.runtime.state().line_clear_timer_ms > 0,
+        ))
+        .child(render_game_over_tint(ui.runtime.state().game_over))
         .child(render_frame(layout.stroke_width))
 }
 
@@ -199,9 +203,9 @@ fn render_active_overlay(
 }
 
 pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement + use<> {
-    let next_1 = ui.state.next_queue.first().copied();
-    let next_2 = ui.state.next_queue.get(1).copied();
-    let next_3 = ui.state.next_queue.get(2).copied();
+    let next_1 = ui.runtime.state().next_queue.first().copied();
+    let next_2 = ui.runtime.state().next_queue.get(1).copied();
+    let next_3 = ui.runtime.state().next_queue.get(2).copied();
     let next_gap = PANEL_ITEM_SPACING * layout.scale;
     let section_gap = PANEL_SECTION_SPACING * layout.scale;
     let item_gap = PANEL_ITEM_SPACING * layout.scale;
@@ -239,9 +243,9 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
         )
         .child(divider())
         .child(render_lock_bar(
-            ui.state.lock_timer_ms,
-            ui.state.lock_delay_ms,
-            ui.state.is_grounded(),
+            ui.runtime.state().lock_timer_ms,
+            ui.runtime.state().lock_delay_ms,
+            ui.runtime.state().is_grounded(),
             layout.panel_content_width,
             layout.scale,
         ))
@@ -259,7 +263,7 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
                 )
                 .child(render_preview(
                     ui,
-                    ui.state.hold,
+                    ui.runtime.state().hold,
                     PREVIEW_CELL * layout.scale,
                     layout.scale,
                 )),

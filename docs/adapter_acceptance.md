@@ -12,10 +12,10 @@ them.
 | Assign one controller and implement claim, release, promotion, and observer rules | Connection roles and deterministic promotion are transport-owned | Aligned | Role lifecycle cases in `tests/adapter_tcp.rs` |
 | Validate action counts, restart coupling, place coordinates, and rotation values | Typed parsing rejects invalid commands before mutation | Aligned | Validation cases plus adapter decoding unit tests |
 | Apply commands authoritatively; keep seeded restart deterministic and failed place atomic | Actions reuse core state transitions; place plans against a clone before commit | Aligned | Command, restart, and place cases in `tests/adapter_tcp.rs` |
-| Publish complete observations with stable identities, queue, events, and state hash | `adapter/mod.rs` maps core state and drains bounded causal events | Aligned | Observation, identity, queue, event, and hash tests |
-| Bound frames and outbound data without allowing slow clients to stall the game | Nonblocking capped buffers with latest-observation coalescing | Aligned | Payload-boundary, backpressure, and isolation cases |
-| Preserve snapshot cadence, passive observers, reconnects, and controller liveness | Immediate initial snapshot, configurable throttling, role-aware idle handling | Aligned | Snapshot, idle, and reconnect cases |
-| Pass portable black-box behavior outside the Rust test harness | Release application accepts the authority verifier | Aligned | `adapter_verify.py all` |
+| Publish complete observations with stable identities, queue, events, and state hash | `adapter/mod.rs` maps core state and borrows the latest transition’s bounded events | Aligned | Observation, identity, queue, event, hash and `transition_identity` tests |
+| Bound frames and outbound data without allowing slow clients to stall the game | Nonblocking capped buffers with latest-observation coalescing | Aligned | Payload-boundary/backpressure cases; deterministic short-writer, frame-budget and rotation unit tests |
+| Preserve snapshot cadence, passive observers, reconnects, and controller liveness | Immediate initial snapshot, configurable throttling, role-aware idle handling | Aligned | Snapshot, monotonic idle, reconnect and `runtime_tcp` cases |
+| Pass portable black-box behavior outside the Rust test harness | Release application accepts the authority verifier | Aligned on tested release | `adapter_verify.py all`: ready/claim/restart/determinism passed; see audit remediation record |
 
 Run the repository gates in `AGENTS.md`; the TCP suite may require loopback
 socket permission.

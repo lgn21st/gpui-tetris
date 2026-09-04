@@ -27,7 +27,6 @@ fn can_place_and_collision_detection() {
 
     assert!(board.can_place(&piece, piece.x, piece.y, piece.rotation));
 
-    board.cells[0][1].filled = true;
     board.cells[0][1].kind = Some(TetrominoType::I);
     assert!(!board.can_place(&piece, piece.x, piece.y, piece.rotation));
 }
@@ -43,7 +42,7 @@ fn lock_piece_marks_cells() {
     for (dx, dy) in piece.blocks(piece.rotation) {
         let x = (piece.x + dx) as usize;
         let y = (piece.y + dy) as usize;
-        assert!(board.cells[y][x].filled);
+        assert!(board.cells[y][x].kind.is_some());
         assert_eq!(board.cells[y][x].kind, Some(TetrominoType::O));
     }
 }
@@ -54,13 +53,12 @@ fn clear_lines_removes_full_row() {
     let y = BOARD_HEIGHT - 1;
 
     for x in 0..BOARD_WIDTH {
-        board.cells[y][x].filled = true;
         board.cells[y][x].kind = Some(TetrominoType::T);
     }
 
     let cleared = board.clear_lines();
     assert_eq!(cleared, 1);
-    assert!(board.cells[y].iter().all(|cell| !cell.filled));
+    assert!(board.cells[y].iter().all(|cell| !cell.kind.is_some()));
 }
 
 #[test]

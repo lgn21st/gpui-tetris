@@ -1,17 +1,27 @@
 [package]
 name = "gpui-tetris"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.97.1"
 license = "MIT"
 
+[features]
+default = ["desktop"]
+desktop = ["dep:gpui-kit", "dep:gilrs", "audio"]
+audio = ["dep:cpal", "dep:crossbeam-channel", "dep:hound", "dep:anyhow"]
+
+[[bin]]
+name = "gpui-tetris"
+path = "src/main.rs"
+required-features = ["desktop"]
+
 [dependencies]
-gpui-kit = "=0.6.0"
-cpal = "0.18.1"
-crossbeam-channel = "0.5.16"
-hound = "3.5.1"
-anyhow = "1.0.104"
-gilrs = "0.11.2"
+gpui-kit = { version = "=0.6.0", optional = true }
+cpal = { version = "0.18.1", optional = true }
+crossbeam-channel = { version = "0.5.16", optional = true }
+hound = { version = "3.5.1", optional = true }
+anyhow = { version = "1.0.104", optional = true }
+gilrs = { version = "0.11.2", optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 semver = "1.0.28"

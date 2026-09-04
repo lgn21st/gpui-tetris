@@ -2,7 +2,7 @@ use crate::game::board::Board;
 use crate::game::input::GameAction;
 use crate::game::pieces::{Rotation, Tetromino, TetrominoType};
 use crate::game::state::GameState;
-use crate::game::state::kicks::srs_kicks;
+use crate::game::state::kicks::rotated_piece;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
 
@@ -61,8 +61,8 @@ fn neighbors(
     kind: TetrominoType,
     board: &Board,
     state: PlanState,
-) -> Vec<(GameAction, PlanState, u32)> {
-    let mut next = Vec::with_capacity(5);
+) -> impl Iterator<Item = (GameAction, PlanState, u32)> {
+    let mut next = [None; 5];
 
     let left = PlanState {
         x: state.x - 1,
@@ -70,7 +70,7 @@ fn neighbors(
         rotation: state.rotation,
     };
     if can_place_plan(kind, board, left) {
-        next.push((GameAction::MoveLeft, left, 1));
+        next[0] = Some((GameAction::MoveLeft, left, 1));
     }
     let right = PlanState {
         x: state.x + 1,
@@ -78,7 +78,7 @@ fn neighbors(
         rotation: state.rotation,
     };
     if can_place_plan(kind, board, right) {
-        next.push((GameAction::MoveRight, right, 1));
+        next[1] = Some((GameAction::MoveRight, right, 1));
     }
     let down = PlanState {
         x: state.x,
@@ -86,16 +86,16 @@ fn neighbors(
         rotation: state.rotation,
     };
     if can_place_plan(kind, board, down) {
-        next.push((GameAction::SoftDrop, down, 4));
+        next[2] = Some((GameAction::SoftDrop, down, 4));
     }
 
     if let Some(rot_cw) = rotate_plan(kind, board, state, true) {
-        next.push((GameAction::RotateCw, rot_cw, 3));
+        next[3] = Some((GameAction::RotateCw, rot_cw, 3));
     }
     if let Some(rot_ccw) = rotate_plan(kind, board, state, false) {
-        next.push((GameAction::RotateCcw, rot_ccw, 3));
+        next[4] = Some((GameAction::RotateCcw, rot_ccw, 3));
     }
-    next
+    next.into_iter().flatten()
 }
 
 fn rotate_plan(
@@ -104,22 +104,17 @@ fn rotate_plan(
     state: PlanState,
     clockwise: bool,
 ) -> Option<PlanState> {
-    let next_rotation = if clockwise {
-        state.rotation.cw()
-    } else {
-        state.rotation.ccw()
+    let piece = Tetromino {
+        kind,
+        rotation: state.rotation,
+        x: state.x,
+        y: state.y,
     };
-    for (dx, dy) in srs_kicks(kind, state.rotation, next_rotation) {
-        let candidate = PlanState {
-            x: state.x + dx,
-            y: state.y + dy,
-            rotation: next_rotation,
-        };
-        if can_place_plan(kind, board, candidate) {
-            return Some(candidate);
-        }
-    }
-    None
+    rotated_piece(board, piece, clockwise).map(|piece| PlanState {
+        x: piece.x,
+        y: piece.y,
+        rotation: piece.rotation,
+    })
 }
 
 fn can_place_plan(kind: TetrominoType, board: &Board, state: PlanState) -> bool {

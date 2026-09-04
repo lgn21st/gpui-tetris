@@ -31,7 +31,6 @@ fn emits_line_clear_sound() {
 #[test]
 fn emits_game_over_sound_on_spawn_blocked() {
     let mut state = GameState::new(3, GameConfig::default());
-    state.board.cells[0][4].filled = true;
     state.board.cells[0][4].kind = Some(TetrominoType::I);
     state.next_queue = vec![TetrominoType::O];
 

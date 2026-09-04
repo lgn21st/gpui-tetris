@@ -5,7 +5,6 @@ pub const BOARD_HEIGHT: usize = 20;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Cell {
-    pub filled: bool,
     pub kind: Option<crate::game::pieces::TetrominoType>,
 }
 
@@ -35,7 +34,7 @@ impl Board {
         if !self.is_inside(x, y) {
             return true;
         }
-        self.cells[y as usize][x as usize].filled
+        self.cells[y as usize][x as usize].kind.is_some()
     }
 
     pub fn can_place(&self, piece: &Tetromino, x: i32, y: i32, rotation: Rotation) -> bool {
@@ -55,7 +54,6 @@ impl Board {
             let ny = piece.y + dy;
             if self.is_inside(nx, ny) {
                 let cell = &mut self.cells[ny as usize][nx as usize];
-                cell.filled = true;
                 cell.kind = Some(piece.kind);
             }
         }
@@ -66,8 +64,8 @@ impl Board {
         let mut write_row = BOARD_HEIGHT as i32 - 1;
 
         for read_row in (0..BOARD_HEIGHT as i32).rev() {
-            let full =
-                (0..BOARD_WIDTH as i32).all(|x| self.cells[read_row as usize][x as usize].filled);
+            let full = (0..BOARD_WIDTH as i32)
+                .all(|x| self.cells[read_row as usize][x as usize].kind.is_some());
 
             if full {
                 cleared += 1;

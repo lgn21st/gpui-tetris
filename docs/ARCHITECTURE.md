@@ -3,7 +3,8 @@
 ## Boundaries
 
 - `src/game/` owns deterministic rules and state without GPUI dependencies.
-- `src/ui/` owns lifecycle, device input, rendering, and UI caches.
+- `src/runtime.rs` owns the authoritative game, lifecycle, clock and Adapter pump.
+- `src/ui/` owns device input, presentation state, rendering, and UI caches.
 - `src/adapter/` maps protocol data, plans placement through core rules, and
   runs the nonblocking TCP transport.
 - `src/audio.rs` consumes bounded sound events; failure is non-fatal.
@@ -24,27 +25,45 @@ per-frame path does not depend on general-purpose widgets.
 
 ## Runtime
 
-`TetrisView::render` drives the application loop:
+`TetrisView` owns a cancellable executor task that pumps `Runtime` every 8 ms,
+independently of display callbacks. Its window context explicitly requests a
+refresh after pumping; simulation never waits for that refresh. Hiding, occluding or minimizing the window
+does not stop TCP or game time. `render` reads the game through `Runtime::state`
+and updates presentation caches; it does not run game or network work.
 
-1. Poll Adapter and controller input.
-2. Apply accepted actions and advance bounded fixed steps.
-3. Refresh changed render caches.
-4. Publish the latest authoritative observation and render.
-5. Request the next frame.
+Each pump applies accepted Adapter commands, advances bounded fixed steps with
+local repeat actions, and publishes a full snapshot. The clock accumulates
+`Duration`, retains fractional milliseconds, and caps catch-up at 15 steps.
+The core pause state is authoritative. Opening settings requests a normal pause;
+remote resume/restart closes that overlay instead of leaving a second tick gate.
 
-The Adapter has no worker thread. Sockets are nonblocking and observations are
-coalesced, so slow clients cannot stall rendering. Exact transport limits and
-startup policy are in `adapter-implementation-profile.md`.
+Window deactivation clears held local input without pausing the core. Controller
+polling has a per-pump event budget; inactive input and events queued before
+reactivation are discarded. Pure repeat/mapping tests do not initialize devices.
 
-`GameState` owns gameplay, timers, RNG, protocol identities, and events. Tick
-order is defined in `rules-spec.md`; long frame stalls are truncated at the UI
-boundary. Focus loss clears held UI input, while menus and device state remain
-UI concerns.
+`GameState` owns gameplay, timers, RNG and the latest transition's events.
+Advancing logical_step replaces the event scope. Observations borrow the step
+and events together, so throttling/coalescing skips whole transitions. Board
+occupancy has one representation (`Cell.kind`), and its private revision changes
+only when locked cells change. Runtime exposes no mutable game reference to UI.
+The core's public construction APIs remain available for deterministic fixtures.
+
+TCP remains on the application thread, with nonblocking sockets and separate
+budgets for accepts, reads, frames, commands and writes. A single outbound cursor
+protects started frames; response priority applies only at frame boundaries.
+Optional diagnostic logging uses a bounded worker queue and rolling files.
+Exact limits and startup policy are in `adapter-implementation-profile.md`.
+
+HUD labels use shared strings and compare underlying values before formatting.
+Board serialization uses a fixed cell array. Audio mixing owns its preallocated
+voice buffer inside the callback, uses a bounded event drain, and converts
+samples directly without locks or format-specific scratch buffers.
 
 ## Change ownership
 
 | Concern | Location |
 | --- | --- |
+| Authoritative lifecycle and fixed clock | `runtime.rs` |
 | Movement, timing, rotation, scoring | `game/state/` |
 | Pieces and board | `game/pieces.rs`, `game/board.rs` |
 | HUD and game rendering | `ui/ui_state.rs`, `ui/render/` |

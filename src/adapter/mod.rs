@@ -75,7 +75,6 @@ fn apply_protocol_command(
                 if !working.can_hold {
                     return Err(CommandMapError::HoldUnavailable);
                 }
-                actions.push(GameAction::Hold);
                 working.apply_action(GameAction::Hold);
             }
             let Some(mut plan) = plan_place_actions(&working, *x, *rotation) else {
@@ -121,7 +120,8 @@ struct ClientIdentity {
 #[derive(Deserialize)]
 struct RequestedConfig {
     stream_observations: bool,
-    command_mode: CommandMode,
+    #[serde(rename = "command_mode")]
+    _command_mode: CommandMode,
     #[serde(default)]
     role: RequestedRole,
 }
@@ -136,17 +136,40 @@ enum RequestedRole {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CommandMessage {
-    #[serde(rename = "type")]
-    _message_type: String,
-    seq: u64,
-    #[allow(dead_code)]
-    ts: u64,
-    mode: CommandMode,
-    actions: Option<Vec<ActionName>>,
-    place: Option<PlacePayload>,
-    restart: Option<RestartPayload>,
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+enum CommandMessage {
+    Action {
+        #[serde(rename = "type")]
+        _message_type: String,
+        seq: u64,
+        #[serde(rename = "ts")]
+        _ts: u64,
+        actions: Vec<ActionName>,
+        #[serde(default, deserialize_with = "present_restart")]
+        restart: Option<RestartPayload>,
+    },
+    Place {
+        #[serde(rename = "type")]
+        _message_type: String,
+        seq: u64,
+        #[serde(rename = "ts")]
+        _ts: u64,
+        place: PlacePayload,
+    },
+}
+
+impl CommandMessage {
+    fn seq(&self) -> u64 {
+        match self {
+            Self::Action { seq, .. } | Self::Place { seq, .. } => *seq,
+        }
+    }
+}
+
+fn present_restart<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<RestartPayload>, D::Error> {
+    RestartPayload::deserialize(d).map(Some)
 }
 
 #[derive(Deserialize)]
@@ -244,7 +267,7 @@ impl InMessage {
     fn seq(&self) -> u64 {
         match self {
             InMessage::Hello(msg) => msg.seq,
-            InMessage::Command(msg) => msg.seq,
+            InMessage::Command(msg) => msg.seq(),
             InMessage::Control(msg) => msg.seq,
         }
     }
@@ -269,21 +292,17 @@ fn decode_incoming(line: &[u8]) -> Option<InMessage> {
 fn parse_protocol_command(
     command: CommandMessage,
 ) -> Result<ProtocolCommand, (&'static str, &'static str)> {
-    match command.mode {
-        CommandMode::Action => {
-            if command.place.is_some() {
-                return Err(("invalid_command", "Unexpected place payload."));
-            }
-            let Some(actions) = command.actions else {
-                return Err(("invalid_command", "Missing command payload."));
-            };
+    match command {
+        CommandMessage::Action {
+            actions, restart, ..
+        } => {
             if actions.len() > 32 {
                 return Err(("invalid_command", "Too many actions."));
             }
             let has_restart = actions
                 .iter()
                 .any(|action| matches!(action, ActionName::Restart));
-            if command.restart.is_some() && !has_restart {
+            if restart.is_some() && !has_restart {
                 return Err((
                     "invalid_command",
                     "restart parameters require a restart action.",
@@ -305,16 +324,10 @@ fn parse_protocol_command(
                 .collect();
             Ok(ProtocolCommand::Action {
                 actions: mapped,
-                restart_seed: command.restart.map(|restart| restart.seed),
+                restart_seed: restart.map(|restart| restart.seed),
             })
         }
-        CommandMode::Place => {
-            if command.actions.is_some() || command.restart.is_some() {
-                return Err(("invalid_command", "Unexpected action payload."));
-            }
-            let Some(place) = command.place else {
-                return Err(("invalid_command", "Missing command payload."));
-            };
+        CommandMessage::Place { place, .. } => {
             if !(-128..=127).contains(&place.x) {
                 return Err(("invalid_command", "Place origin is outside schema range."));
             }
@@ -414,7 +427,8 @@ struct Observation {
 }
 
 impl Observation {
-    fn from_state(seq: u64, ts: u64, state: &GameState, events: Vec<GameEvent>) -> Self {
+    fn from_state(seq: u64, ts: u64, state: &GameState) -> Self {
+        let transition = state.transition();
         let board = ObservationBoard::from_state(state);
         let next_queue: Vec<PieceKind> = state
             .next_queue
@@ -429,7 +443,7 @@ impl Observation {
             r#type: "observation",
             seq,
             ts,
-            logical_step: state.logical_step,
+            logical_step: transition.logical_step,
             playable: !state.paused && !state.game_over,
             paused: state.paused,
             game_over: state.game_over,
@@ -445,7 +459,12 @@ impl Observation {
             next_queue,
             hold,
             can_hold: state.can_hold,
-            events: events.into_iter().map(ObservationEvent::from).collect(),
+            events: transition
+                .events
+                .iter()
+                .copied()
+                .map(ObservationEvent::from)
+                .collect(),
             state_hash: state_hash(state),
             score: state.score,
             level: state.level,
@@ -463,25 +482,21 @@ impl Observation {
 struct ObservationBoard {
     width: usize,
     height: usize,
-    cells: Vec<Vec<u8>>,
-    kinds: Vec<Vec<Option<PieceKind>>>,
+    cells: [[u8; BOARD_WIDTH]; BOARD_HEIGHT],
 }
 
 impl ObservationBoard {
     fn from_state(state: &GameState) -> Self {
-        let mut cells = vec![vec![0_u8; BOARD_WIDTH]; BOARD_HEIGHT];
-        let mut kinds = vec![vec![None; BOARD_WIDTH]; BOARD_HEIGHT];
+        let mut cells = [[0_u8; BOARD_WIDTH]; BOARD_HEIGHT];
         for (y, row) in state.board.cells.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
                 cells[y][x] = cell.kind.map(piece_kind_byte).unwrap_or(0);
-                kinds[y][x] = cell.kind.map(PieceKind::from);
             }
         }
         Self {
             width: BOARD_WIDTH,
             height: BOARD_HEIGHT,
             cells,
-            kinds,
         }
     }
 }
@@ -629,7 +644,7 @@ fn state_hash(state: &GameState) -> String {
     }
     for row in &state.board.cells {
         for cell in row {
-            mix_byte(&mut hash, if cell.filled { 1 } else { 0 });
+            mix_byte(&mut hash, if cell.kind.is_some() { 1 } else { 0 });
             if let Some(kind) = cell.kind {
                 mix_byte(&mut hash, piece_kind_byte(kind));
             } else {
@@ -685,6 +700,35 @@ mod tests {
     use crate::game::state::GameConfig;
 
     #[test]
+    fn command_modes_reject_foreign_and_null_payloads() {
+        for extra in [r#","place":null"#, r#","restart":null"#, r#","place":{}"#] {
+            let json = format!(
+                r#"{{"type":"command","seq":2,"ts":1,"mode":"action","actions":[]{extra}}}"#
+            );
+            assert!(decode_incoming(json.as_bytes()).is_none(), "{json}");
+        }
+        let json = br#"{"type":"command","seq":2,"ts":1,"mode":"place","place":{"x":3,"rotation":"north","useHold":false},"actions":null}"#;
+        assert!(decode_incoming(json).is_none());
+    }
+
+    #[test]
+    fn place_with_hold_matches_explicit_actions_without_an_extra_step() {
+        for seed in 1..=7 {
+            let mut placed = GameState::new(seed, GameConfig::default());
+            let mut explicit = placed.clone();
+            explicit.apply_action(GameAction::Hold);
+            let command = ProtocolCommand::Place {
+                x: explicit.active.x,
+                rotation: explicit.active.rotation,
+                use_hold: true,
+            };
+            explicit.apply_action(GameAction::HardDrop);
+            apply_protocol_command(&command, &mut placed).unwrap();
+            assert_eq!(state_hash(&placed), state_hash(&explicit));
+        }
+    }
+
+    #[test]
     fn decode_rotation_requires_schema_case() {
         let json = br#"{"type":"command","seq":2,"ts":1,"mode":"place","place":{"x":3,"rotation":"EAST","useHold":false}}"#;
         assert!(decode_incoming(json).is_none());
@@ -719,7 +763,6 @@ mod tests {
         let mut state = GameState::new(1, GameConfig::default());
         let before = state_hash(&state);
         state.board.cells[0][0] = crate::game::board::Cell {
-            filled: true,
             kind: Some(TetrominoType::I),
         };
         let after = state_hash(&state);

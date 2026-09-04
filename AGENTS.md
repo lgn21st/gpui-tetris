@@ -6,7 +6,8 @@ live only in `rust-toolchain.toml`, `Cargo.toml`, and `Cargo.lock`.
 ## Ownership
 
 - `src/game/`: deterministic board, pieces, actions, scoring, timing, RNG.
-- `src/ui/`: GPUI Kit lifecycle, device input, HUD, rendering, and UI caches.
+- `src/runtime.rs`: authoritative lifecycle, fixed clock, and Adapter pump.
+- `src/ui/`: GPUI Kit integration, device input, HUD, rendering, and UI caches.
 - `src/adapter/mod.rs`: Adapter protocol model, mapping, and snapshots.
 - `src/adapter/planning.rs`: place-command search over core rules.
 - `src/adapter/transport.rs`: nonblocking TCP lifecycle, buffers, and logging.

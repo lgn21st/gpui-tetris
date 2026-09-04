@@ -1,7 +1,7 @@
 use crate::game::input::GameAction;
 use crate::game::pieces::{Tetromino, TetrominoType, spawn_position};
 
-use super::kicks::srs_kicks;
+use super::kicks::rotated_piece;
 use super::scoring::t_spin_kind;
 use super::{GameState, Ruleset, SoundEvent, TSpinKind};
 
@@ -156,30 +156,14 @@ pub(super) fn try_move(state: &mut GameState, dx: i32, dy: i32) -> bool {
 }
 
 pub(super) fn try_rotate(state: &mut GameState, clockwise: bool) -> bool {
-    let next_rotation = if clockwise {
-        state.active.rotation.cw()
-    } else {
-        state.active.rotation.ccw()
+    let Some(piece) = rotated_piece(&state.board, state.active, clockwise) else {
+        return false;
     };
-    let kicks = srs_kicks(state.active.kind, state.active.rotation, next_rotation);
-    for (dx, dy) in kicks.iter() {
-        let new_x = state.active.x + dx;
-        let new_y = state.active.y + dy;
-        if state
-            .board
-            .can_place(&state.active, new_x, new_y, next_rotation)
-        {
-            state.active.x = new_x;
-            state.active.y = new_y;
-            state.active.rotation = next_rotation;
-            state.active_moved_since_spawn = true;
-            update_ghost_cache(state);
-            handle_lock_reset(state);
-            return true;
-        }
-    }
-
-    false
+    state.active = piece;
+    state.active_moved_since_spawn = true;
+    update_ghost_cache(state);
+    handle_lock_reset(state);
+    true
 }
 
 pub(super) fn can_move_down(state: &GameState) -> bool {
@@ -212,9 +196,12 @@ pub(super) fn lock_active_piece(state: &mut GameState) {
     };
     let score_before_clear = state.score;
     set_landing_flash(state);
+    let previous_cells = state.board.cells;
     state.board.lock_piece(&state.active);
     let cleared = state.board.clear_lines();
-    state.board_revision = state.board_revision.wrapping_add(1);
+    if state.board.cells != previous_cells {
+        state.board_revision = state.board_revision.wrapping_add(1);
+    }
     state.apply_line_clear(cleared, t_spin);
     state.push_protocol_event(super::GameEvent {
         locked: true,

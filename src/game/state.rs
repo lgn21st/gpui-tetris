@@ -1,4 +1,4 @@
-use crate::game::board::{BOARD_HEIGHT, Board};
+use crate::game::board::Board;
 use crate::game::input::GameAction;
 use crate::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
 
@@ -55,7 +55,7 @@ pub struct GameState {
     pub last_lock_cells: [(i32, i32); 4],
     pub ghost_cache: [(i32, i32); 4],
     pub active_moved_since_spawn: bool,
-    pub board_revision: u64,
+    board_revision: u64,
     pub seed: u64,
     pub episode_id: u64,
     pub piece_id: u64,
@@ -149,10 +149,6 @@ impl GameState {
         apply_line_clear(self, cleared, t_spin);
     }
 
-    pub fn is_lock_row(&self) -> bool {
-        self.active.y >= BOARD_HEIGHT as i32 - 1
-    }
-
     pub fn drop_interval_ms(&self, soft_drop: bool) -> u64 {
         drop_interval_ms(self, soft_drop)
     }
@@ -165,12 +161,24 @@ impl GameState {
         apply_action(self, action);
     }
 
+    pub fn drain_sound_events(&mut self) -> impl Iterator<Item = SoundEvent> + '_ {
+        self.sound_events.drain(..)
+    }
+
     pub fn take_sound_events(&mut self) -> Vec<SoundEvent> {
         std::mem::take(&mut self.sound_events)
     }
 
     pub(crate) fn push_sound_event(&mut self, event: SoundEvent) {
         push_bounded(&mut self.sound_events, event, MAX_SOUND_EVENTS);
+    }
+
+    /// Events and identity are borrowed from the same latest logical transition.
+    pub fn transition(&self) -> Transition<'_> {
+        Transition {
+            logical_step: self.logical_step,
+            events: &self.protocol_events,
+        }
     }
 
     pub fn take_protocol_events(&mut self) -> Vec<GameEvent> {
@@ -182,6 +190,7 @@ impl GameState {
     }
 
     pub(crate) fn advance_logical_step(&mut self) {
+        self.protocol_events.clear();
         self.logical_step = self.logical_step.saturating_add(1);
         self.step_in_piece = self.step_in_piece.saturating_add(1);
     }
@@ -232,7 +241,13 @@ impl GameState {
     pub fn reset_with_seed(&mut self, seed: u64) {
         let next_episode = self.episode_id.saturating_add(1);
         let next_step = self.logical_step.saturating_add(1);
-        let next_board_revision = self.board_revision.wrapping_add(1);
+        let board_changed = self
+            .board
+            .cells
+            .iter()
+            .flatten()
+            .any(|cell| cell.kind.is_some());
+        let next_board_revision = self.board_revision.wrapping_add(u64::from(board_changed));
         let mut next = GameState::new(seed, self.current_config());
         next.episode_id = next_episode;
         next.logical_step = next_step;
@@ -303,4 +318,10 @@ fn spawn_first_piece(next_queue: &mut Vec<TetrominoType>) -> Tetromino {
     let first_kind = next_queue.remove(0);
     let (spawn_x, spawn_y) = spawn_position();
     Tetromino::new(first_kind, spawn_x, spawn_y)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Transition<'a> {
+    pub logical_step: u64,
+    pub events: &'a [GameEvent],
 }

@@ -22,14 +22,21 @@ fn grounded_moves_reset_lock_delay_until_limit() {
     assert_eq!(state.lock_timer_ms, 900);
 
     state.tick(200, false);
-    assert!(state.board.cells.iter().flatten().any(|cell| cell.filled));
+    assert!(
+        state
+            .board
+            .cells
+            .iter()
+            .flatten()
+            .any(|cell| cell.kind.is_some())
+    );
 }
 
 #[test]
 fn becoming_airborne_restores_lock_reset_budget() {
     let mut state = GameState::new(2, GameConfig::default());
     state.active = Tetromino::new(TetrominoType::O, 3, BOARD_HEIGHT as i32 - 3);
-    state.board.cells[BOARD_HEIGHT - 1][4].filled = true;
+    state.board.cells[BOARD_HEIGHT - 1][4].kind = Some(gpui_tetris::game::pieces::TetrominoType::I);
     state.lock_reset_count = state.lock_reset_limit;
     state.lock_timer_ms = 300;
 

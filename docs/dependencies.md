@@ -37,3 +37,8 @@ the graphics stack. `rustls-pemfile` comes through GPUI's HTTP client; the game
 does not initiate HTTP requests. `rustybuzz` and `ttf-parser` are in the SVG/font
 rendering stack. Reassess these paths on Kit upgrades rather than patching
 independent framework crates locally.
+
+The default `desktop` feature enables Kit, controller support and `audio`.
+`cargo test --all-targets --no-default-features --offline` builds and tests
+core rules, the Runtime and Adapter without GPUI, Gilrs or CPAL. The application
+binary requires `desktop`; normal `cargo bundle --release` retains the full app.

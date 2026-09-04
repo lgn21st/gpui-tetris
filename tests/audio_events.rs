@@ -1,3 +1,5 @@
+#![cfg(feature = "audio")]
+
 use gpui_tetris::audio::sound_event_spec;
 use gpui_tetris::game::state::SoundEvent;
 
