@@ -1,6 +1,6 @@
-use gpui_tetris::game::board::BOARD_HEIGHT;
-use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState};
+use crate::game::board::BOARD_HEIGHT;
+use crate::game::pieces::{Tetromino, TetrominoType};
+use crate::game::state::{GameConfig, GameState};
 
 #[test]
 fn line_clear_active_reflects_timer() {

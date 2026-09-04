@@ -46,7 +46,14 @@ Advancing logical_step replaces the event scope. Observations borrow the step
 and events together, so throttling/coalescing skips whole transitions. Board
 occupancy has one representation (`Cell.kind`), and its private revision changes
 only when locked cells change. Runtime exposes no mutable game reference to UI.
-The core's public construction APIs remain available for deterministic fixtures.
+All GameState fields are private, including the board, timers and identity.
+Consumers use read-only accessors: board/queue return shared references and the
+active piece is copied. Only actions, ticks and resets change authoritative
+state. Scoring/spawn helpers are private; protocol events are borrowed rather
+than consumed. Internal boundary fixtures live in `src/game/state/tests/` and
+are compiled only for unit tests. Public Adapter and Runtime regressions remain
+in `tests/`, using legal action sequences to construct scenarios. Compile-fail
+doc tests protect the write boundary.
 
 TCP remains on the application thread, with nonblocking sockets and separate
 budgets for accepts, reads, frames, commands and writes. A single outbound cursor

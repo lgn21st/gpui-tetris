@@ -66,13 +66,13 @@ fn apply_protocol_command(
             rotation,
             use_hold,
         } => {
-            if state.paused || state.game_over {
+            if state.paused() || state.game_over() {
                 return Err(CommandMapError::InvalidPlace);
             }
             let mut working = state.clone();
             let mut actions = Vec::new();
             if *use_hold {
-                if !working.can_hold {
+                if !working.can_hold() {
                     return Err(CommandMapError::HoldUnavailable);
                 }
                 working.apply_action(GameAction::Hold);
@@ -431,34 +431,34 @@ impl Observation {
         let transition = state.transition();
         let board = ObservationBoard::from_state(state);
         let next_queue: Vec<PieceKind> = state
-            .next_queue
+            .next_queue()
             .iter()
             .copied()
             .map(PieceKind::from)
             .take(5)
             .collect();
-        let next = PieceKind::from(state.next_queue[0]);
-        let hold = state.hold.map(PieceKind::from);
+        let next = PieceKind::from(state.next_queue()[0]);
+        let hold = state.hold().map(PieceKind::from);
         Self {
             r#type: "observation",
             seq,
             ts,
             logical_step: transition.logical_step,
-            playable: !state.paused && !state.game_over,
-            paused: state.paused,
-            game_over: state.game_over,
-            episode_id: state.episode_id,
-            seed: state.seed,
-            piece_id: state.piece_id,
-            step_in_piece: state.step_in_piece,
+            playable: !state.paused() && !state.game_over(),
+            paused: state.paused(),
+            game_over: state.game_over(),
+            episode_id: state.episode_id(),
+            seed: state.seed(),
+            piece_id: state.piece_id(),
+            step_in_piece: state.step_in_piece(),
             board,
             board_id: state.board_revision(),
-            active: (!state.game_over).then(|| ObservationActive::from_piece(state.active)),
-            ghost_y: (!state.game_over).then(|| state.ghost_y()),
+            active: (!state.game_over()).then(|| ObservationActive::from_piece(state.active())),
+            ghost_y: (!state.game_over()).then(|| state.ghost_y()),
             next,
             next_queue,
             hold,
-            can_hold: state.can_hold,
+            can_hold: state.can_hold(),
             events: transition
                 .events
                 .iter()
@@ -466,13 +466,13 @@ impl Observation {
                 .map(ObservationEvent::from)
                 .collect(),
             state_hash: state_hash(state),
-            score: state.score,
-            level: state.level,
-            lines: state.lines,
+            score: state.score(),
+            level: state.level(),
+            lines: state.lines(),
             timers: Timers {
-                drop_ms: state.drop_timer_ms,
-                lock_ms: state.lock_timer_ms,
-                line_clear_ms: state.line_clear_timer_ms,
+                drop_ms: state.drop_timer_ms(),
+                lock_ms: state.lock_timer_ms(),
+                line_clear_ms: state.line_clear_timer_ms(),
             },
         }
     }
@@ -488,7 +488,7 @@ struct ObservationBoard {
 impl ObservationBoard {
     fn from_state(state: &GameState) -> Self {
         let mut cells = [[0_u8; BOARD_WIDTH]; BOARD_HEIGHT];
-        for (y, row) in state.board.cells.iter().enumerate() {
+        for (y, row) in state.board().cells.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
                 cells[y][x] = cell.kind.map(piece_kind_byte).unwrap_or(0);
             }
@@ -596,7 +596,7 @@ fn encode_message(message: &OutMessage<'_>) -> Option<Vec<u8>> {
     }
 }
 
-fn state_hash(state: &GameState) -> String {
+pub(crate) fn state_hash(state: &GameState) -> String {
     let mut hash: u64 = 14_695_981_039_346_656_037;
     fn mix_byte(hash: &mut u64, byte: u8) {
         *hash ^= u64::from(byte);
@@ -609,40 +609,40 @@ fn state_hash(state: &GameState) -> String {
         }
     }
 
-    mix_u64(&mut hash, state.score as u64);
-    mix_u64(&mut hash, state.seed);
-    mix_u64(&mut hash, state.episode_id);
-    mix_u64(&mut hash, state.piece_id);
-    mix_u64(&mut hash, state.step_in_piece);
-    mix_u64(&mut hash, state.logical_step);
-    mix_u64(&mut hash, state.level as u64);
-    mix_u64(&mut hash, state.lines as u64);
-    mix_u64(&mut hash, state.combo as u64);
-    mix_byte(&mut hash, u8::from(state.back_to_back));
+    mix_u64(&mut hash, state.score() as u64);
+    mix_u64(&mut hash, state.seed());
+    mix_u64(&mut hash, state.episode_id());
+    mix_u64(&mut hash, state.piece_id());
+    mix_u64(&mut hash, state.step_in_piece());
+    mix_u64(&mut hash, state.logical_step());
+    mix_u64(&mut hash, state.level() as u64);
+    mix_u64(&mut hash, state.lines() as u64);
+    mix_u64(&mut hash, state.combo() as u64);
+    mix_byte(&mut hash, u8::from(state.back_to_back()));
     mix_byte(&mut hash, u8::from(state.is_classic_ruleset()));
-    mix_u64(&mut hash, state.drop_timer_ms);
-    mix_u64(&mut hash, state.lock_timer_ms);
-    mix_u64(&mut hash, state.line_clear_timer_ms);
-    mix_u64(&mut hash, state.soft_drop_timeout_ms);
-    mix_u64(&mut hash, state.lock_reset_count as u64);
+    mix_u64(&mut hash, state.drop_timer_ms());
+    mix_u64(&mut hash, state.lock_timer_ms());
+    mix_u64(&mut hash, state.line_clear_timer_ms());
+    mix_u64(&mut hash, state.soft_drop_timeout_ms());
+    mix_u64(&mut hash, state.lock_reset_count() as u64);
     mix_u64(&mut hash, state.board_revision());
-    mix_byte(&mut hash, u8::from(state.paused));
-    mix_byte(&mut hash, u8::from(state.game_over));
-    mix_u64(&mut hash, state.active.x as u64);
-    mix_u64(&mut hash, state.active.y as u64);
-    mix_byte(&mut hash, piece_kind_byte(state.active.kind));
-    mix_byte(&mut hash, rotation_byte(state.active.rotation));
-    if let Some(hold) = state.hold {
+    mix_byte(&mut hash, u8::from(state.paused()));
+    mix_byte(&mut hash, u8::from(state.game_over()));
+    mix_u64(&mut hash, state.active().x as u64);
+    mix_u64(&mut hash, state.active().y as u64);
+    mix_byte(&mut hash, piece_kind_byte(state.active().kind));
+    mix_byte(&mut hash, rotation_byte(state.active().rotation));
+    if let Some(hold) = state.hold() {
         mix_byte(&mut hash, piece_kind_byte(hold));
     } else {
         mix_byte(&mut hash, 0);
     }
-    mix_byte(&mut hash, if state.can_hold { 1 } else { 0 });
+    mix_byte(&mut hash, if state.can_hold() { 1 } else { 0 });
 
-    for kind in &state.next_queue {
+    for kind in state.next_queue() {
         mix_byte(&mut hash, piece_kind_byte(*kind));
     }
-    for row in &state.board.cells {
+    for row in &state.board().cells {
         for cell in row {
             mix_byte(&mut hash, if cell.kind.is_some() { 1 } else { 0 });
             if let Some(kind) = cell.kind {
@@ -718,8 +718,8 @@ mod tests {
             let mut explicit = placed.clone();
             explicit.apply_action(GameAction::Hold);
             let command = ProtocolCommand::Place {
-                x: explicit.active.x,
-                rotation: explicit.active.rotation,
+                x: explicit.active().x,
+                rotation: explicit.active().rotation,
                 use_hold: true,
             };
             explicit.apply_action(GameAction::HardDrop);
@@ -752,32 +752,9 @@ mod tests {
     #[test]
     fn place_planner_finds_simple_path() {
         let state = GameState::new(1, GameConfig::default());
-        let actions = plan_place_actions(&state, state.active.x + 1, state.active.rotation);
+        let actions = plan_place_actions(&state, state.active().x + 1, state.active().rotation);
         assert!(actions.is_some());
         let actions = actions.unwrap();
         assert!(actions.contains(&GameAction::MoveRight));
-    }
-
-    #[test]
-    fn state_hash_changes_when_board_changes() {
-        let mut state = GameState::new(1, GameConfig::default());
-        let before = state_hash(&state);
-        state.board.cells[0][0] = crate::game::board::Cell {
-            kind: Some(TetrominoType::I),
-        };
-        let after = state_hash(&state);
-        assert_ne!(before, after);
-    }
-
-    #[test]
-    fn state_hash_covers_logical_and_scoring_identity() {
-        let mut state = GameState::new(1, GameConfig::default());
-        let before = state_hash(&state);
-        state.logical_step += 1;
-        assert_ne!(before, state_hash(&state));
-
-        let before = state_hash(&state);
-        state.combo += 1;
-        assert_ne!(before, state_hash(&state));
     }
 }

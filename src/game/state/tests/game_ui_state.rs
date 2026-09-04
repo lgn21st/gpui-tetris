@@ -1,5 +1,5 @@
-use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::state::{GameConfig, GameState};
+use crate::game::input::GameAction;
+use crate::game::state::{GameConfig, GameState};
 
 #[test]
 fn pause_toggles_state() {
@@ -32,8 +32,8 @@ fn restart_resets_score_and_flags() {
 #[test]
 fn game_over_when_spawn_blocked() {
     let mut state = GameState::new(3, GameConfig::default());
-    state.board.cells[0][4].kind = Some(gpui_tetris::game::pieces::TetrominoType::I);
-    state.next_queue = vec![gpui_tetris::game::pieces::TetrominoType::O];
+    state.board.cells[0][4].kind = Some(crate::game::pieces::TetrominoType::I);
+    state.next_queue = vec![crate::game::pieces::TetrominoType::O];
 
     state.spawn_next();
 

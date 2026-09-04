@@ -1,7 +1,7 @@
-use gpui_tetris::game::board::BOARD_HEIGHT;
-use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState, Ruleset, TSpinKind};
+use crate::game::board::BOARD_HEIGHT;
+use crate::game::input::GameAction;
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType};
+use crate::game::state::{GameConfig, GameState, Ruleset, TSpinKind};
 
 #[test]
 fn combo_bonus_increases_on_consecutive_clears() {

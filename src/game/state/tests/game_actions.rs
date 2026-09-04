@@ -1,7 +1,7 @@
-use gpui_tetris::game::board::{BOARD_HEIGHT, Board};
-use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState};
+use crate::game::board::{BOARD_HEIGHT, Board};
+use crate::game::input::GameAction;
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType};
+use crate::game::state::{GameConfig, GameState};
 
 #[test]
 fn move_left_stops_at_wall() {

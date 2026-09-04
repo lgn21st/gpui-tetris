@@ -1,7 +1,7 @@
-use gpui_tetris::game::board::BOARD_HEIGHT;
-use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState};
+use crate::game::board::BOARD_HEIGHT;
+use crate::game::input::GameAction;
+use crate::game::pieces::{Tetromino, TetrominoType};
+use crate::game::state::{GameConfig, GameState};
 
 #[test]
 fn grounded_moves_reset_lock_delay_until_limit() {
@@ -36,7 +36,7 @@ fn grounded_moves_reset_lock_delay_until_limit() {
 fn becoming_airborne_restores_lock_reset_budget() {
     let mut state = GameState::new(2, GameConfig::default());
     state.active = Tetromino::new(TetrominoType::O, 3, BOARD_HEIGHT as i32 - 3);
-    state.board.cells[BOARD_HEIGHT - 1][4].kind = Some(gpui_tetris::game::pieces::TetrominoType::I);
+    state.board.cells[BOARD_HEIGHT - 1][4].kind = Some(crate::game::pieces::TetrominoType::I);
     state.lock_reset_count = state.lock_reset_limit;
     state.lock_timer_ms = 300;
 

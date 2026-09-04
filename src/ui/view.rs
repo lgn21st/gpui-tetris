@@ -135,8 +135,8 @@ impl Render for TetrisView {
         let overlay = render_overlay(&OverlayState {
             started: self.ui.runtime.started(),
             show_settings: self.ui.show_settings,
-            paused: self.ui.runtime.state().paused,
-            game_over: self.ui.runtime.state().game_over,
+            paused: self.ui.runtime.state().paused(),
+            game_over: self.ui.runtime.state().game_over(),
             scale,
         });
         let game_content = div()

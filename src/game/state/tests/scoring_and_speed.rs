@@ -1,7 +1,7 @@
-use gpui_tetris::game::board::BOARD_HEIGHT;
-use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState, RulesConfig, Ruleset, TSpinKind};
+use crate::game::board::BOARD_HEIGHT;
+use crate::game::input::GameAction;
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType};
+use crate::game::state::{GameConfig, GameState, RulesConfig, Ruleset, TSpinKind};
 
 #[test]
 fn soft_drop_awards_point_per_cell() {

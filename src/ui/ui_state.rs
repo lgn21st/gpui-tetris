@@ -155,18 +155,18 @@ impl UiState {
     pub fn can_accept_game_input(&self) -> bool {
         self.runtime.started()
             && !self.show_settings
-            && !self.runtime.state().paused
-            && !self.runtime.state().game_over
+            && !self.runtime.state().paused()
+            && !self.runtime.state().game_over()
     }
 
     pub fn status_label(&self) -> &'static str {
         if !self.runtime.started() {
             "Ready"
-        } else if self.runtime.state().game_over {
+        } else if self.runtime.state().game_over() {
             "Game Over"
         } else if self.show_settings {
             "Settings"
-        } else if self.runtime.state().paused {
+        } else if self.runtime.state().paused() {
             "Paused"
         } else {
             "Playing"
@@ -272,12 +272,12 @@ impl UiState {
     pub fn sync_panel_labels(&mut self) {
         let state = self.runtime.state();
         let next = PanelSnapshot {
-            score: state.score,
-            level: state.level,
-            lines: state.lines,
+            score: state.score(),
+            level: state.level(),
+            lines: state.lines(),
             status: self.status_label(),
             ruleset: self.ruleset_label(),
-            can_hold: state.can_hold,
+            can_hold: state.can_hold(),
         };
         let old = self.panel_snapshot;
         if old.is_none_or(|old| old.score != next.score) {
@@ -307,7 +307,7 @@ impl UiState {
         if self.board_revision == revision {
             return;
         }
-        for (y, row) in self.runtime.state().board.cells.iter().enumerate() {
+        for (y, row) in self.runtime.state().board().cells.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
                 let idx = y * BOARD_WIDTH + x;
                 self.board_cache[idx] = cell.kind;
@@ -318,10 +318,10 @@ impl UiState {
 
     fn snapshot_active(&self) -> ActiveSnapshot {
         ActiveSnapshot {
-            kind: self.runtime.state().active.kind,
-            x: self.runtime.state().active.x,
-            y: self.runtime.state().active.y,
-            rotation: self.runtime.state().active.rotation,
+            kind: self.runtime.state().active().kind,
+            x: self.runtime.state().active().x,
+            y: self.runtime.state().active().y,
+            rotation: self.runtime.state().active().rotation,
         }
     }
 }
@@ -407,7 +407,7 @@ mod tests {
 
         assert!(ui.runtime.started());
         assert!(!ui.show_settings);
-        assert!(!ui.runtime.state().paused);
+        assert!(!ui.runtime.state().paused());
     }
 
     #[test]
@@ -419,7 +419,7 @@ mod tests {
         ui.toggle_settings();
 
         assert!(ui.show_settings);
-        assert!(ui.runtime.state().paused);
+        assert!(ui.runtime.state().paused());
     }
 
     #[test]
@@ -451,7 +451,7 @@ mod tests {
         let mut ui = UiState::new(GameState::new(1, Default::default()), None);
         ui.start_game();
         ui.toggle_settings();
-        assert!(ui.runtime.state().paused);
+        assert!(ui.runtime.state().paused());
         ui.runtime.apply_action(GameAction::Restart);
         ui.sync_lifecycle();
         assert!(!ui.show_settings);
@@ -469,7 +469,7 @@ mod tests {
         ui.receive_action(GameAction::MoveLeft);
 
         assert_eq!(ui.active_snapshot(), active_before);
-        assert!(ui.runtime.state().paused);
+        assert!(ui.runtime.state().paused());
     }
 
     #[test]

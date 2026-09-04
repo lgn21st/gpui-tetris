@@ -681,7 +681,7 @@ impl SocketAdapter {
             ts: now_unix_ms(),
             status: "ok",
             correlation_seq: seq,
-            applied_step: Some(state.logical_step),
+            applied_step: Some(state.logical_step()),
             state_hash: Some(&hash),
         });
         if let Some(data) = encode_message(&msg) {

@@ -1,6 +1,6 @@
-use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
-use gpui_tetris::game::state::{GameConfig, GameState};
+use crate::game::input::GameAction;
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
+use crate::game::state::{GameConfig, GameState};
 
 #[test]
 fn hold_sets_piece_and_spawns_next() {

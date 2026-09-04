@@ -1,6 +1,6 @@
-use gpui_tetris::game::board::BOARD_HEIGHT;
-use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState};
+use crate::game::board::BOARD_HEIGHT;
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType};
+use crate::game::state::{GameConfig, GameState};
 
 #[test]
 fn tick_advances_piece_after_drop_interval() {
@@ -29,7 +29,7 @@ fn tick_uses_soft_drop_interval() {
     let mut state = GameState::new(2, config);
     let start_y = state.active.y;
 
-    state.activate_soft_drop();
+    super::super::actions::activate_soft_drop(&mut state);
     state.tick(99, false);
     assert_eq!(state.active.y, start_y);
 
@@ -78,7 +78,7 @@ fn soft_drop_expires_after_grace_period() {
         ..GameConfig::default()
     };
     let mut state = GameState::new(5, config);
-    state.activate_soft_drop();
+    super::super::actions::activate_soft_drop(&mut state);
     assert!(state.is_soft_drop_active());
 
     state.tick(100, false);

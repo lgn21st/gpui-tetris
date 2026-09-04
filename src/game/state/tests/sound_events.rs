@@ -1,6 +1,6 @@
-use gpui_tetris::game::input::GameAction;
-use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType};
-use gpui_tetris::game::state::{GameConfig, GameState, SoundEvent, TSpinKind};
+use crate::game::input::GameAction;
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType};
+use crate::game::state::{GameConfig, GameState, SoundEvent, TSpinKind};
 
 #[test]
 fn emits_sound_events_for_actions() {
@@ -13,7 +13,7 @@ fn emits_sound_events_for_actions() {
     state.apply_action(GameAction::SoftDrop);
     state.apply_action(GameAction::HardDrop);
 
-    let events = state.take_sound_events();
+    let events = state.drain_sound_events().collect::<Vec<_>>();
     assert!(events.contains(&SoundEvent::Move));
     assert!(events.contains(&SoundEvent::Rotate));
     assert!(events.contains(&SoundEvent::SoftDrop));
@@ -24,7 +24,7 @@ fn emits_sound_events_for_actions() {
 fn emits_line_clear_sound() {
     let mut state = GameState::new(2, GameConfig::default());
     state.apply_line_clear(2, TSpinKind::None);
-    let events = state.take_sound_events();
+    let events = state.drain_sound_events().collect::<Vec<_>>();
     assert!(events.contains(&SoundEvent::LineClear(2)));
 }
 
@@ -36,7 +36,7 @@ fn emits_game_over_sound_on_spawn_blocked() {
 
     state.spawn_next();
 
-    let events = state.take_sound_events();
+    let events = state.drain_sound_events().collect::<Vec<_>>();
     assert!(events.contains(&SoundEvent::GameOver));
 }
 
@@ -48,7 +48,7 @@ fn blocked_actions_do_not_emit_success_sounds() {
     state.apply_action(GameAction::MoveLeft);
     state.apply_action(GameAction::RotateCw);
 
-    let events = state.take_sound_events();
+    let events = state.drain_sound_events().collect::<Vec<_>>();
     assert!(!events.contains(&SoundEvent::Move));
     assert!(!events.contains(&SoundEvent::Rotate));
 }
@@ -60,5 +60,5 @@ fn sound_event_buffer_is_bounded() {
         state.apply_line_clear(1, TSpinKind::None);
     }
 
-    assert_eq!(state.take_sound_events().len(), 256);
+    assert_eq!(state.drain_sound_events().collect::<Vec<_>>().len(), 256);
 }

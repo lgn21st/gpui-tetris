@@ -464,7 +464,7 @@ fn controller_command_receives_ack_and_applies_action() {
 
     send_json_line(&mut client, hello(1));
     let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
-    let start_x = state.active.x;
+    let start_x = state.active().x;
 
     send_json_line(
         &mut client,
@@ -479,7 +479,7 @@ fn controller_command_receives_ack_and_applies_action() {
     let ack = wait_for_type(&mut client, &mut adapter, &mut state, "ack");
     assert_eq!(ack["seq"], 2);
     assert_eq!(ack["status"], "ok");
-    assert!(state.active.x <= start_x);
+    assert!(state.active().x <= start_x);
     let observation = wait_for_observation(&mut client, &mut adapter, &mut state);
     assert_eq!(ack["state_hash"], observation["state_hash"]);
     assert_eq!(ack["applied_step"], observation["logical_step"]);
@@ -543,13 +543,13 @@ fn duplicate_or_decreasing_sequence_is_rejected() {
     });
     send_json_line(&mut client, command.clone());
     let _ = wait_for_type(&mut client, &mut adapter, &mut state, "ack");
-    let logical_step = state.logical_step;
+    let logical_step = state.logical_step();
 
     send_json_line(&mut client, command);
     let error = wait_for_type(&mut client, &mut adapter, &mut state, "error");
     assert_eq!(error["seq"], 2);
     assert_eq!(error["code"], "invalid_command");
-    assert_eq!(state.logical_step, logical_step);
+    assert_eq!(state.logical_step(), logical_step);
 }
 
 #[test]
@@ -708,16 +708,34 @@ fn lock_event_reports_actual_clear_and_score() {
     send_json_line(&mut client, hello(1));
     let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
 
-    use gpui_tetris::game::board::{BOARD_HEIGHT, BOARD_WIDTH};
-    use gpui_tetris::game::pieces::{Tetromino, TetrominoType};
-    for x in 0..BOARD_WIDTH {
-        if !(3..=6).contains(&x) {
-            state.board.cells[BOARD_HEIGHT - 1][x].kind =
-                Some(gpui_tetris::game::pieces::TetrominoType::I);
-            state.board.cells[BOARD_HEIGHT - 1][x].kind = Some(TetrominoType::O);
+    use gpui_tetris::game::input::GameAction;
+    // Seed 1 reaches a one-line clear through legal actions; no state mutation
+    // or production fixture API is needed to exercise transport serialization.
+    let placements = [
+        (0, 0),
+        (0, 2),
+        (0, 5),
+        (3, 8),
+        (1, 4),
+        (1, 6),
+        (0, 0),
+        (1, 8),
+    ];
+    for (index, (rotations, rights)) in placements.into_iter().enumerate() {
+        for _ in 0..rotations {
+            state.apply_action(GameAction::RotateCw);
+        }
+        for _ in 0..12 {
+            state.apply_action(GameAction::MoveLeft);
+        }
+        for _ in 0..rights {
+            state.apply_action(GameAction::MoveRight);
+        }
+        if index + 1 < placements.len() {
+            state.apply_action(GameAction::HardDrop);
         }
     }
-    state.active = Tetromino::new(TetrominoType::I, 3, BOARD_HEIGHT as i32 - 2);
+    assert_eq!(state.lines(), 0);
     send_json_line(
         &mut client,
         serde_json::json!({
@@ -752,7 +770,7 @@ fn events_belong_only_to_the_observed_transition() {
     let observation = wait_for_observation(&mut client, &mut adapter, &mut state);
     let events = observation["events"].as_array().expect("events array");
     assert_eq!(events.len(), 1);
-    assert_eq!(observation["logical_step"], state.logical_step);
+    assert_eq!(observation["logical_step"], state.logical_step());
     assert!(events.iter().all(|event| event["locked"] == true));
 }
 
@@ -797,8 +815,7 @@ fn restart_command_transitions_to_playable_and_unpaused() {
     let (mut adapter, mut state, addr) = test_adapter();
     let mut client = connect(&addr);
 
-    state.paused = true;
-    state.game_over = false;
+    state.apply_action(gpui_tetris::game::input::GameAction::Pause);
 
     send_json_line(&mut client, hello(1));
     let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
@@ -858,11 +875,11 @@ fn invalid_place_is_atomic() {
     let mut client = connect(&addr);
     send_json_line(&mut client, hello_with_mode(1, "place"));
     let _ = wait_for_type(&mut client, &mut adapter, &mut state, "welcome");
-    let active = state.active;
-    let hold = state.hold;
-    let queue = state.next_queue.clone();
-    let score = state.score;
-    let logical_step = state.logical_step;
+    let active = state.active();
+    let hold = state.hold();
+    let queue = state.next_queue().to_vec();
+    let score = state.score();
+    let logical_step = state.logical_step();
     let board_revision = state.board_revision();
 
     send_json_line(
@@ -874,11 +891,11 @@ fn invalid_place_is_atomic() {
     );
     let error = wait_for_type(&mut client, &mut adapter, &mut state, "error");
     assert_eq!(error["code"], "invalid_place");
-    assert_eq!(state.active, active);
-    assert_eq!(state.hold, hold);
-    assert_eq!(state.next_queue, queue);
-    assert_eq!(state.score, score);
-    assert_eq!(state.logical_step, logical_step);
+    assert_eq!(state.active(), active);
+    assert_eq!(state.hold(), hold);
+    assert_eq!(state.next_queue(), queue);
+    assert_eq!(state.score(), score);
+    assert_eq!(state.logical_step(), logical_step);
     assert_eq!(state.board_revision(), board_revision);
 }
 

@@ -1,6 +1,6 @@
-use gpui_tetris::game::board::{BOARD_HEIGHT, BOARD_WIDTH, Board};
-use gpui_tetris::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
-use gpui_tetris::game::state::{GameConfig, GameState, TSpinKind};
+use crate::game::board::{BOARD_HEIGHT, BOARD_WIDTH, Board};
+use crate::game::pieces::{Rotation, Tetromino, TetrominoType, spawn_position};
+use crate::game::state::{GameConfig, GameState, TSpinKind};
 
 #[test]
 fn rotation_cycles() {

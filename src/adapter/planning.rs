@@ -18,12 +18,12 @@ pub(super) fn plan_place_actions(
     target_x: i32,
     target_rotation: Rotation,
 ) -> Option<Vec<GameAction>> {
-    let board = &state.board;
-    let kind = state.active.kind;
+    let board = state.board();
+    let kind = state.active().kind;
     let start = PlanState {
-        x: state.active.x,
-        y: state.active.y,
-        rotation: state.active.rotation,
+        x: state.active().x,
+        y: state.active().y,
+        rotation: state.active().rotation,
     };
     if !can_place_plan(kind, board, start) {
         return None;

@@ -1,4 +1,4 @@
-use gpui_tetris::game::state::{GameConfig, GameState};
+use crate::game::state::{GameConfig, GameState};
 
 #[test]
 fn next_queue_keeps_minimum_size() {

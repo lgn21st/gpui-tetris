@@ -38,7 +38,7 @@ impl Runtime {
         self.started
     }
     pub fn playable(&self) -> bool {
-        self.started && !self.state.paused && !self.state.game_over
+        self.started && !self.state.paused() && !self.state.game_over()
     }
 
     pub fn start(&mut self) {
@@ -64,7 +64,7 @@ impl Runtime {
     }
 
     pub fn pause(&mut self) {
-        if !self.state.paused && !self.state.game_over {
+        if !self.state.paused() && !self.state.game_over() {
             self.state.apply_action(GameAction::Pause);
             self.clock.remainder = Duration::ZERO;
         }
@@ -73,14 +73,14 @@ impl Runtime {
     /// One bounded pump: accepted commands, fixed steps with local repeats, then snapshot.
     /// The repeat source supplies actions only, never mutable access to the game.
     pub fn pump(&mut self, now: Instant, mut repeats: impl FnMut(u64, bool, &mut Vec<GameAction>)) {
-        let previous_lifecycle = (self.state.episode_id, self.state.paused);
+        let previous_lifecycle = (self.state.episode_id(), self.state.paused());
         if let Some(adapter) = &mut self.adapter {
             adapter.poll_and_apply_at(&mut self.state, now);
         }
-        if previous_lifecycle != (self.state.episode_id, self.state.paused) {
+        if previous_lifecycle != (self.state.episode_id(), self.state.paused()) {
             self.clock.remainder = Duration::ZERO;
         }
-        let step = Duration::from_millis(self.state.tick_ms.max(1));
+        let step = Duration::from_millis(self.state.tick_ms().max(1));
         let steps = self.clock.advance(now, step, self.playable());
         for _ in 0..steps {
             self.state.tick(step.as_millis() as u64, false);
@@ -169,13 +169,13 @@ mod tests {
         runtime.start();
         let now = Instant::now();
         runtime.pump(now, |_, _, _| {});
-        let before = runtime.state().logical_step;
+        let before = runtime.state().logical_step();
         runtime.pump(now + Duration::from_millis(32), |_, _, _| {});
-        assert_eq!(runtime.state().logical_step, before + 2);
+        assert_eq!(runtime.state().logical_step(), before + 2);
         runtime.pause();
-        let paused = runtime.state().logical_step;
+        let paused = runtime.state().logical_step();
         runtime.pump(now + Duration::from_secs(1), |_, _, _| {});
-        assert_eq!(runtime.state().logical_step, paused);
+        assert_eq!(runtime.state().logical_step(), paused);
         runtime.apply_action(GameAction::Restart);
         assert!(runtime.playable());
     }

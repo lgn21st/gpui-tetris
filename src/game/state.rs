@@ -9,10 +9,10 @@ mod scoring;
 mod timing;
 mod types;
 
-use actions::{
-    activate_soft_drop, apply_action, can_move_down, ghost_blocks, ghost_y, lock_active_piece,
-    try_move,
-};
+#[cfg(test)]
+mod tests;
+
+use actions::{apply_action, can_move_down, ghost_blocks, ghost_y, lock_active_piece, try_move};
 use rng::{SimpleRng, ensure_queue};
 use scoring::apply_line_clear;
 use timing::{drop_interval_ms, tick};
@@ -23,44 +23,58 @@ const SPAWN_QUEUE_MIN: usize = 6;
 const MAX_PROTOCOL_EVENTS: usize = 4;
 const MAX_SOUND_EVENTS: usize = 256;
 
+/// Authoritative state. Configure a new game with `GameConfig`; advance it with
+/// actions, ticks or seeded resets. Readers cannot mutate fields or board cells.
+///
+/// ```compile_fail
+/// use gpui_tetris::game::state::GameState;
+/// let mut game = GameState::new(1, Default::default());
+/// game.paused = true;
+/// ```
+///
+/// ```compile_fail
+/// use gpui_tetris::game::state::GameState;
+/// let mut game = GameState::new(1, Default::default());
+/// game.board().cells[0][0].kind = None;
+/// ```
 #[derive(Clone, Debug)]
 pub struct GameState {
-    pub board: Board,
-    pub active: Tetromino,
-    pub hold: Option<TetrominoType>,
-    pub can_hold: bool,
-    pub next_queue: Vec<TetrominoType>,
-    pub score: u32,
-    pub level: u32,
-    pub lines: u32,
-    pub combo: i32,
-    pub back_to_back: bool,
-    pub ruleset: Ruleset,
-    pub rules: types::RulesConfig,
-    pub game_over: bool,
-    pub paused: bool,
-    pub tick_ms: u64,
-    pub soft_drop_multiplier: u64,
-    pub lock_delay_ms: u64,
-    pub lock_reset_limit: u32,
-    pub lock_reset_count: u32,
-    pub base_drop_ms: u64,
-    pub soft_drop_grace_ms: u64,
-    pub soft_drop_active: bool,
-    pub soft_drop_timeout_ms: u64,
-    pub drop_timer_ms: u64,
-    pub lock_timer_ms: u64,
-    pub line_clear_timer_ms: u64,
-    pub landing_flash_timer_ms: u64,
-    pub last_lock_cells: [(i32, i32); 4],
-    pub ghost_cache: [(i32, i32); 4],
-    pub active_moved_since_spawn: bool,
+    board: Board,
+    active: Tetromino,
+    hold: Option<TetrominoType>,
+    can_hold: bool,
+    next_queue: Vec<TetrominoType>,
+    score: u32,
+    level: u32,
+    lines: u32,
+    combo: i32,
+    back_to_back: bool,
+    ruleset: Ruleset,
+    rules: types::RulesConfig,
+    game_over: bool,
+    paused: bool,
+    tick_ms: u64,
+    soft_drop_multiplier: u64,
+    lock_delay_ms: u64,
+    lock_reset_limit: u32,
+    lock_reset_count: u32,
+    base_drop_ms: u64,
+    soft_drop_grace_ms: u64,
+    soft_drop_active: bool,
+    soft_drop_timeout_ms: u64,
+    drop_timer_ms: u64,
+    lock_timer_ms: u64,
+    line_clear_timer_ms: u64,
+    landing_flash_timer_ms: u64,
+    last_lock_cells: [(i32, i32); 4],
+    ghost_cache: [(i32, i32); 4],
+    active_moved_since_spawn: bool,
     board_revision: u64,
-    pub seed: u64,
-    pub episode_id: u64,
-    pub piece_id: u64,
-    pub step_in_piece: u64,
-    pub logical_step: u64,
+    seed: u64,
+    episode_id: u64,
+    piece_id: u64,
+    step_in_piece: u64,
+    logical_step: u64,
     sound_events: Vec<SoundEvent>,
     protocol_events: Vec<GameEvent>,
     last_action_rotate: bool,
@@ -68,6 +82,110 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
+
+    pub fn active(&self) -> Tetromino {
+        self.active
+    }
+
+    pub fn hold(&self) -> Option<TetrominoType> {
+        self.hold
+    }
+
+    pub fn can_hold(&self) -> bool {
+        self.can_hold
+    }
+
+    pub fn next_queue(&self) -> &[TetrominoType] {
+        &self.next_queue
+    }
+
+    pub fn score(&self) -> u32 {
+        self.score
+    }
+
+    pub fn level(&self) -> u32 {
+        self.level
+    }
+
+    pub fn lines(&self) -> u32 {
+        self.lines
+    }
+
+    pub fn combo(&self) -> i32 {
+        self.combo
+    }
+
+    pub fn back_to_back(&self) -> bool {
+        self.back_to_back
+    }
+
+    pub fn game_over(&self) -> bool {
+        self.game_over
+    }
+
+    pub fn paused(&self) -> bool {
+        self.paused
+    }
+
+    pub fn tick_ms(&self) -> u64 {
+        self.tick_ms
+    }
+
+    pub fn lock_delay_ms(&self) -> u64 {
+        self.lock_delay_ms
+    }
+
+    pub fn lock_reset_count(&self) -> u32 {
+        self.lock_reset_count
+    }
+
+    pub fn soft_drop_timeout_ms(&self) -> u64 {
+        self.soft_drop_timeout_ms
+    }
+
+    pub fn drop_timer_ms(&self) -> u64 {
+        self.drop_timer_ms
+    }
+
+    pub fn lock_timer_ms(&self) -> u64 {
+        self.lock_timer_ms
+    }
+
+    pub fn line_clear_timer_ms(&self) -> u64 {
+        self.line_clear_timer_ms
+    }
+
+    pub fn last_lock_cells(&self) -> [(i32, i32); 4] {
+        self.last_lock_cells
+    }
+
+    pub fn active_moved_since_spawn(&self) -> bool {
+        self.active_moved_since_spawn
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    pub fn episode_id(&self) -> u64 {
+        self.episode_id
+    }
+
+    pub fn piece_id(&self) -> u64 {
+        self.piece_id
+    }
+
+    pub fn step_in_piece(&self) -> u64 {
+        self.step_in_piece
+    }
+
+    pub fn logical_step(&self) -> u64 {
+        self.logical_step
+    }
+
     pub fn new(seed: u64, config: GameConfig) -> Self {
         let mut rng = SimpleRng::new(seed);
         let mut next_queue = init_next_queue(&mut rng);
@@ -119,7 +237,7 @@ impl GameState {
         state
     }
 
-    pub fn spawn_next(&mut self) {
+    fn spawn_next(&mut self) {
         ensure_queue(&mut self.rng, &mut self.next_queue, SPAWN_QUEUE_MIN);
 
         let kind = self.next_queue.remove(0);
@@ -145,7 +263,7 @@ impl GameState {
         }
     }
 
-    pub fn apply_line_clear(&mut self, cleared: usize, t_spin: TSpinKind) {
+    fn apply_line_clear(&mut self, cleared: usize, t_spin: TSpinKind) {
         apply_line_clear(self, cleared, t_spin);
     }
 
@@ -165,10 +283,6 @@ impl GameState {
         self.sound_events.drain(..)
     }
 
-    pub fn take_sound_events(&mut self) -> Vec<SoundEvent> {
-        std::mem::take(&mut self.sound_events)
-    }
-
     pub(crate) fn push_sound_event(&mut self, event: SoundEvent) {
         push_bounded(&mut self.sound_events, event, MAX_SOUND_EVENTS);
     }
@@ -179,10 +293,6 @@ impl GameState {
             logical_step: self.logical_step,
             events: &self.protocol_events,
         }
-    }
-
-    pub fn take_protocol_events(&mut self) -> Vec<GameEvent> {
-        std::mem::take(&mut self.protocol_events)
     }
 
     pub(crate) fn push_protocol_event(&mut self, event: GameEvent) {
@@ -257,10 +367,6 @@ impl GameState {
 
     pub fn board_revision(&self) -> u64 {
         self.board_revision
-    }
-
-    pub fn activate_soft_drop(&mut self) {
-        activate_soft_drop(self);
     }
 
     pub fn is_soft_drop_active(&self) -> bool {
