@@ -47,11 +47,11 @@ state_hash 仍是协议定义的实现内 opaque identity；文档明确它不�
 真实手柄硬件行为与扬声器听感不能由纯软件回归测试替代。
 
 
-### Release 与实际应用
+### 本地构建与实际应用
 
 - `cargo bundle --release` 成功；首次依赖重编译约 9 分钟，窗口刷新调整后再次增量构建成功。
 - 产物：`target/release/bundle/osx/gpui-tetris.app`；在源码目录外的 `/tmp/gpui-tetris-audit-verified.app` 启动验收。
-- ad-hoc 签名通过 `codesign --verify --deep --strict`；icon 元数据与资源存在，10 个 WAV 与源码资源逐一校验一致。这不是公证或 Developer ID 分发签名。
+- icon 元数据与资源存在，10 个 WAV 与源码资源逐一校验一致。
 - 对最终应用运行上游 `adapter_verify.py all`，ready、claim、restart、determinism 均通过。
 - 发出最小化操作后，通过独立 TCP 客户端测得约 1.005 秒推进 63 个逻辑步，且 playable 为 true；随后完整协议验证仍通过。
 - 可见全屏窗口下连续键盘操作的棋盘和分数更新已验证（36→58）；普通窗口缩放、全屏往返和设置控件显示已检查。

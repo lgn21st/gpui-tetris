@@ -47,8 +47,8 @@ messages and keep commits focused. UI changes should include a visual check;
 Adapter TCP tests may require permission to bind loopback sockets.
 
 This is an internal project. Release means a local optimized build and app
-bundle; public distribution, GitHub Releases and Apple notarization are out of
-scope. Local builds may include uncommitted changes.
+bundle using Cargo's native commands. Local builds may include uncommitted
+changes.
 
 For release checks, run `cargo bundle --release`, launch the generated app
 outside the source tree, and verify icon, bundled SFX, input, and resizing.
