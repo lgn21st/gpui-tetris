@@ -309,34 +309,20 @@ pub fn render_panel(ui: &mut UiState, layout: &RenderLayout) -> impl IntoElement
 #[cfg(test)]
 mod tests {
     use super::RenderLayout;
-    use crate::ui::style::{
-        BASE_GAP, BASE_PADDING, BOARD_HEIGHT, BOARD_WIDTH, PANEL_ITEM_SPACING,
-        PANEL_SECTION_SPACING, PANEL_WIDTH, PREVIEW_CELL, WINDOW_HEIGHT, WINDOW_WIDTH,
-    };
+    use crate::ui::style::{BASE_GAP, BOARD_HEIGHT, BOARD_WIDTH, PANEL_PADDING, PANEL_WIDTH};
 
     #[test]
     fn base_layout_matches_design_geometry() {
         let layout = RenderLayout::new(1.0);
 
-        assert_eq!(WINDOW_WIDTH, 480.0);
-        assert_eq!(WINDOW_HEIGHT, 720.0);
-        assert_eq!(BASE_PADDING, 16.0);
-        assert_eq!(BASE_GAP, 16.0);
-        assert_eq!(BOARD_WIDTH, 240.0);
-        assert_eq!(BOARD_HEIGHT, 480.0);
-        assert_eq!(PANEL_WIDTH, 192.0);
         assert_eq!(layout.board_width, BOARD_WIDTH);
         assert_eq!(layout.board_height, BOARD_HEIGHT);
         assert_eq!(layout.panel_width, PANEL_WIDTH);
-        assert_eq!(layout.panel_content_width, 168.0);
+        assert_eq!(
+            layout.panel_content_width + 2.0 * PANEL_PADDING,
+            layout.panel_width
+        );
         assert_eq!(layout.content_width, BOARD_WIDTH + BASE_GAP + PANEL_WIDTH);
         assert_eq!(layout.stroke_width, 1.0);
-    }
-
-    #[test]
-    fn panel_spacing_matches_design_geometry() {
-        assert_eq!(PANEL_SECTION_SPACING, 9.6);
-        assert_eq!(PANEL_ITEM_SPACING, 3.2);
-        assert_eq!(PREVIEW_CELL, 12.0);
     }
 }

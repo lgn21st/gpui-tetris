@@ -23,7 +23,7 @@ impl AudioEngine {
     pub fn new(asset_dir: &Path) -> anyhow::Result<Self> {
         let (tx, rx) = crossbeam_channel::bounded(SOUND_QUEUE_CAPACITY);
         let assets = load_assets(asset_dir)?;
-        let master_gain = Arc::new(AtomicU32::new(f32_to_bits(DEFAULT_MASTER_GAIN)));
+        let master_gain = Arc::new(AtomicU32::new(DEFAULT_MASTER_GAIN.to_bits()));
 
         let stream = build_output_stream(rx, assets, master_gain.clone())?;
         stream.play()?;
@@ -41,12 +41,7 @@ impl AudioEngine {
 
     pub fn set_master_gain(&self, gain: f32) {
         let clamped = gain.clamp(0.0, 1.0);
-        self.master_gain
-            .store(f32_to_bits(clamped), Ordering::Relaxed);
-    }
-
-    pub fn master_gain(&self) -> f32 {
-        bits_to_f32(self.master_gain.load(Ordering::Relaxed))
+        self.master_gain.store(clamped.to_bits(), Ordering::Relaxed);
     }
 }
 
@@ -154,7 +149,7 @@ where
         .build_output_stream(
             (*config).into(),
             move |data: &mut [T], _| {
-                let gain = bits_to_f32(params.master_gain.load(Ordering::Relaxed));
+                let gain = f32::from_bits(params.master_gain.load(Ordering::Relaxed));
                 render_audio(
                     data,
                     params.channels,
@@ -294,7 +289,7 @@ fn try_enqueue_sound(sender: &Sender<SoundEvent>, event: SoundEvent) -> bool {
     }
 }
 
-pub fn sound_event_spec(event: &SoundEvent) -> (&'static str, f32) {
+fn sound_event_spec(event: &SoundEvent) -> (&'static str, f32) {
     match event {
         SoundEvent::Move => ("move", 0.25),
         SoundEvent::Rotate => ("rotate", 0.35),
@@ -311,14 +306,6 @@ pub fn sound_event_spec(event: &SoundEvent) -> (&'static str, f32) {
 
 fn soft_clip(sample: f32) -> f32 {
     sample / (1.0 + sample.abs())
-}
-
-fn f32_to_bits(value: f32) -> u32 {
-    value.to_bits()
-}
-
-fn bits_to_f32(value: u32) -> f32 {
-    f32::from_bits(value)
 }
 
 fn push_voice(voices: &mut Vec<Voice>, voice: Voice) {
@@ -400,9 +387,21 @@ mod tests {
     }
 
     #[test]
-    fn master_gain_bits_roundtrip() {
-        let value = 0.42;
-        assert_eq!(bits_to_f32(f32_to_bits(value)), value);
+    fn maps_sound_events_to_assets_and_gains() {
+        for (event, expected) in [
+            (SoundEvent::Move, ("move", 0.25)),
+            (SoundEvent::Rotate, ("rotate", 0.35)),
+            (SoundEvent::SoftDrop, ("soft_drop", 0.2)),
+            (SoundEvent::HardDrop, ("hard_drop", 0.6)),
+            (SoundEvent::Hold, ("hold", 0.5)),
+            (SoundEvent::LineClear(1), ("line_clear_1", 0.6)),
+            (SoundEvent::LineClear(2), ("line_clear_2", 0.7)),
+            (SoundEvent::LineClear(3), ("line_clear_3", 0.8)),
+            (SoundEvent::LineClear(4), ("line_clear_4", 0.9)),
+            (SoundEvent::GameOver, ("game_over", 0.8)),
+        ] {
+            assert_eq!(sound_event_spec(&event), expected);
+        }
     }
 
     #[test]

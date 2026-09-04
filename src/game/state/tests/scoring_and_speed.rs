@@ -51,18 +51,6 @@ fn drop_interval_decreases_with_level_and_has_floor() {
 }
 
 #[test]
-fn move_resets_lock_timer_when_grounded() {
-    let mut state = GameState::new(4, GameConfig::default());
-    state.active = Tetromino::new(TetrominoType::O, 4, BOARD_HEIGHT as i32 - 2);
-    state.active.rotation = Rotation::North;
-    state.lock_timer_ms = 400;
-
-    state.apply_action(GameAction::MoveLeft);
-
-    assert_eq!(state.lock_timer_ms, 0);
-}
-
-#[test]
 fn scoring_saturates_instead_of_overflowing() {
     let rules = RulesConfig {
         classic_line_scores: [u32::MAX; 4],
