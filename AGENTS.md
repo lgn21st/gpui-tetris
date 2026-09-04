@@ -14,7 +14,7 @@ live only in `rust-toolchain.toml`, `Cargo.toml`, and `Cargo.lock`.
 - `src/audio.rs`: optional bounded CPAL mixer and WAV loading.
 - `src/game/state/tests/`: internal rule fixtures and boundary tests.
 - `tests/`: public behavior and integration regression coverage.
-- `scripts/release.py`: verified release preparation and upload.
+- `scripts/release.sh`: local Release compilation and app packaging.
 - `docs/`: maintained architecture, rules, protocol evidence, and operations.
 - `.github/`: CI and weekly dependency-update policy.
 
@@ -47,7 +47,11 @@ Use rustfmt defaults and behavior-based test names. Use imperative commit
 messages and keep commits focused. UI changes should include a visual check;
 Adapter TCP tests may require permission to bind loopback sockets.
 
-For release checks, run `cargo bundle --release`, launch the generated app
+This is an internal project. Release means a local optimized build and app
+bundle; public distribution, GitHub Releases and Apple notarization are out of
+scope. Local builds may include uncommitted changes.
+
+For release checks, run `./scripts/release.sh`, launch the generated app
 outside the source tree, and verify icon, bundled SFX, input, and resizing.
 
 ## Adapter protocol

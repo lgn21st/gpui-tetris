@@ -4,11 +4,16 @@ Desktop Tetris for macOS, written in Rust with [GPUI Kit](https://github.com/lon
 modern scoring, SRS rotation, keyboard/controller input, resizable rendering,
 optional WAV effects, and a TCP adapter for AI clients.
 
-## Download
+## Local Release
 
-Download the macOS Apple Silicon app and its SHA-256 checksum from
-[GitHub Releases](https://github.com/lgn21st/gpui-tetris/releases). Release
-bundles currently use an ad-hoc signature and are not notarized by Apple.
+This is an internal project. Build the current working tree locally:
+
+```bash
+./scripts/release.sh
+```
+
+The application is generated at `target/release/bundle/osx/gpui-tetris.app`.
+See [local build instructions](docs/releasing.md) for prerequisites and usage.
 
 ## Controls
 
@@ -58,12 +63,9 @@ or authentication; keep it on loopback unless the network is trusted.
 ## Assets and packaging
 
 `assets/icon.svg` is the editable icon source and `assets/icon.icns` is the
-macOS bundle artifact. Run `cargo bundle --release` with `cargo-bundle` to build
-an app bundle, then seal the complete bundle with
-`codesign --force --deep --sign - target/release/bundle/osx/gpui-tetris.app`
-for local distribution. Optional effects are loaded from `assets/sfx/`;
-attribution and source mapping are in `docs/audio_assets.md`. The publishing
-checklist is in `docs/releasing.md`.
+macOS bundle artifact. `scripts/release.sh` compiles and packages the app with
+its icon and optional effects from `assets/sfx/`. Attribution and source mapping
+are in `docs/audio_assets.md`.
 
 ## License
 
