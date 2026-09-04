@@ -9,11 +9,22 @@ optional WAV effects, and a TCP adapter for AI clients.
 This is an internal project. Build the current working tree locally:
 
 ```bash
-./scripts/release.sh
+cargo build --release
 ```
 
-The application is generated at `target/release/bundle/osx/gpui-tetris.app`.
-See [local build instructions](docs/releasing.md) for prerequisites and usage.
+The executable is generated at `target/release/gpui-tetris`.
+Use `cargo run --release` to build and run it directly.
+
+For a macOS `.app` bundle, install cargo-bundle once with
+`cargo install cargo-bundle --locked`, then run:
+
+```bash
+cargo bundle --release
+```
+
+The app is generated at `target/release/bundle/osx/gpui-tetris.app`.
+These commands work with uncommitted changes. Set `CARGO_NET_OFFLINE=true`
+to use cached dependencies without network access.
 
 ## Controls
 
@@ -63,7 +74,7 @@ or authentication; keep it on loopback unless the network is trusted.
 ## Assets and packaging
 
 `assets/icon.svg` is the editable icon source and `assets/icon.icns` is the
-macOS bundle artifact. `scripts/release.sh` compiles and packages the app with
+macOS bundle artifact. `cargo bundle --release` packages the app with
 its icon and optional effects from `assets/sfx/`. Attribution and source mapping
 are in `docs/audio_assets.md`.
 
