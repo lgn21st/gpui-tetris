@@ -12,7 +12,9 @@ live only in `rust-toolchain.toml`, `Cargo.toml`, and `Cargo.lock`.
 - `src/adapter/planning.rs`: place-command search over core rules.
 - `src/adapter/transport.rs`: nonblocking TCP lifecycle, buffers, and logging.
 - `src/audio.rs`: optional bounded CPAL mixer and WAV loading.
-- `tests/`: behavior and regression coverage.
+- `src/game/state/tests/`: internal rule fixtures and boundary tests.
+- `tests/`: public behavior and integration regression coverage.
+- `scripts/release.py`: verified release preparation and upload.
 - `docs/`: maintained architecture, rules, protocol evidence, and operations.
 - `.github/`: CI and weekly dependency-update policy.
 
