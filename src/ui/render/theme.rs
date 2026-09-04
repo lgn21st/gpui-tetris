@@ -1,4 +1,4 @@
-use gpui::{Rgba, rgb, rgba};
+use gpui_kit::{Rgba, rgb, rgba};
 
 use crate::ui::style::piece_color;
 use gpui_tetris::game::pieces::TetrominoType;

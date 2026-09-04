@@ -1,12 +1,12 @@
 # Repository Guidelines
 
-Build a desktop Tetris in Rust with GPUI. Toolchain and dependency versions
+Build a desktop Tetris in Rust with GPUI Kit. Toolchain and dependency versions
 live only in `rust-toolchain.toml`, `Cargo.toml`, and `Cargo.lock`.
 
 ## Ownership
 
 - `src/game/`: deterministic board, pieces, actions, scoring, timing, RNG.
-- `src/ui/`: GPUI lifecycle, device input, HUD, rendering, and UI caches.
+- `src/ui/`: GPUI Kit lifecycle, device input, HUD, rendering, and UI caches.
 - `src/adapter/mod.rs`: Adapter protocol model, mapping, and snapshots.
 - `src/adapter/planning.rs`: place-command search over core rules.
 - `src/adapter/transport.rs`: nonblocking TCP lifecycle, buffers, and logging.
@@ -21,6 +21,10 @@ collections, and catch-up loops.
 
 ## Workflow
 
+Read the maintained document for the task: `docs/ARCHITECTURE.md` for structure,
+`docs/rules-spec.md` for gameplay, and `docs/dependencies.md` for dependency
+changes. Adapter work follows the protocol section below.
+
 1. Inspect `git status` and preserve unrelated changes.
 2. Add or update a focused test before behavior changes when practical.
 3. Change the owning module; avoid parallel implementations.
@@ -29,9 +33,9 @@ collections, and catch-up loops.
 5. Run focused tests, then the full gates.
 
 ```bash
-cargo test --all-targets --offline --features gpui/runtime_shaders
-cargo clippy --all-targets --offline --features gpui/runtime_shaders -- -D warnings
-cargo test --doc --offline --features gpui/runtime_shaders
+cargo test --all-targets --offline
+cargo clippy --all-targets --offline -- -D warnings
+cargo test --doc --offline
 cargo fmt --all -- --check
 git diff --check
 ```

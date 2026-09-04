@@ -1,4 +1,4 @@
-use gpui::{IntoElement, div, prelude::*, px};
+use gpui_kit::{IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 

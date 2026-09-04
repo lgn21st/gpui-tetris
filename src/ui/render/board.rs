@@ -1,4 +1,4 @@
-use gpui::{IntoElement, div, prelude::*, px, rgba};
+use gpui_kit::{IntoElement, div, prelude::*, px, rgba};
 
 use crate::ui::render::theme;
 use crate::ui::style::{PREVIEW_CORNER_RADIUS, PREVIEW_GAP, PREVIEW_PADDING};
@@ -155,7 +155,7 @@ pub fn render_line_clear_flash(active: bool) -> impl IntoElement {
         .left_0()
         .right_0()
         .bottom_0()
-        .bg(gpui::rgb(0xffffff))
+        .bg(gpui_kit::rgb(0xffffff))
         .opacity(0.12)
 }
 

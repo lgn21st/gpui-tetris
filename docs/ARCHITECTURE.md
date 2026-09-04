@@ -11,11 +11,16 @@
 `GameAction` is the mutation boundary. UI and Adapter inputs both pass through
 it, and Adapter placement reuses core collision, rotation, and scoring logic.
 
-The window root is a `gpui-component` `Root` around `TetrisView`. The component
-layer supplies reusable settings controls; `TetrisView` retains game focus and
+GPUI Kit is the only direct UI dependency. Its platform factory creates the
+application, its asset provider embeds component icons, and its initializer
+sets up the enabled layers before views are created. Window creation runs on
+the application executor, following Kit's asynchronous startup pattern.
+
+The window root is a `gpui_kit::component::Root` around `TetrisView`. Kit
+supplies reusable settings controls; `TetrisView` retains game focus and
 keyboard shortcuts. The board, HUD, overlays tied to gameplay, and animation
-remain project-owned GPUI elements so the per-frame path does not depend on
-general-purpose widgets.
+remain project-owned elements using `gpui_kit` rendering primitives so the
+per-frame path does not depend on general-purpose widgets.
 
 ## Runtime
 

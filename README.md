@@ -1,6 +1,6 @@
 # gpui-tetris
 
-Desktop Tetris for macOS, written in Rust with GPUI. It provides classic and
+Desktop Tetris for macOS, written in Rust with [GPUI Kit](https://github.com/longbridge/gpui-kit). It provides classic and
 modern scoring, SRS rotation, keyboard/controller input, resizable rendering,
 optional WAV effects, and a TCP adapter for AI clients.
 
@@ -29,7 +29,7 @@ dependency requirements in `Cargo.toml`.
 cargo run
 ```
 
-Core rules live in `src/game/`; GPUI lifecycle, input, and rendering live in
+Core rules live in `src/game/`; GPUI Kit lifecycle, input, and rendering live in
 `src/ui/`; the AI transport lives in `src/adapter/`. See
 `docs/ARCHITECTURE.md`, `docs/rules-spec.md`, and `docs/dependencies.md` for the
 maintained contracts. Contributor workflow and verification commands are in

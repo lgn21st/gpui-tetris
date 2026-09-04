@@ -1,4 +1,4 @@
-use gpui::{FontWeight, IntoElement, div, prelude::*, px};
+use gpui_kit::{FontWeight, IntoElement, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::style::{BASE_HINT_TEXT, BASE_ONBOARDING_TEXT, BASE_TITLE_TEXT};

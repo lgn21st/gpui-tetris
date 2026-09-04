@@ -1,7 +1,7 @@
 use crate::ui::input::InputAction;
 use crate::ui::style::SFX_VOLUME_STEP;
 use crate::ui::view::TetrisView;
-use gpui::{Context, KeyDownEvent, KeyUpEvent, Window};
+use gpui_kit::{Context, KeyDownEvent, KeyUpEvent, Window};
 
 impl TetrisView {
     pub(super) fn on_key_down(
@@ -87,7 +87,7 @@ impl TetrisView {
         }
 
         if !self.focus_handle.is_focused(window) {
-            self.focus_handle.focus(window);
+            self.focus_handle.focus(window, cx);
         }
     }
 
@@ -116,11 +116,11 @@ impl TetrisView {
 
     pub(super) fn on_mouse_down(
         &mut self,
-        _event: &gpui::MouseDownEvent,
+        _event: &gpui_kit::MouseDownEvent,
         window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
-        self.focus_handle.focus(window);
+        self.focus_handle.focus(window, cx);
     }
 
     pub(super) fn apply_input_actions(&mut self, actions: &[InputAction]) {

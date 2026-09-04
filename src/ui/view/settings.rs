@@ -1,10 +1,10 @@
-use gpui::{ClickEvent, Context, IntoElement, Window, div, prelude::*, px};
-use gpui_component::{
+use gpui_kit::component::{
     StyledExt,
     button::{Button, ButtonVariants},
     slider::Slider,
     switch::Switch,
 };
+use gpui_kit::{ClickEvent, Context, IntoElement, Window, div, prelude::*, px};
 
 use crate::ui::render::theme;
 use crate::ui::view::TetrisView;
@@ -125,7 +125,7 @@ impl TetrisView {
 
     fn on_close_settings(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.ui.close_settings();
-        self.focus_handle.focus(window);
+        self.focus_handle.focus(window, cx);
         cx.notify();
     }
 }

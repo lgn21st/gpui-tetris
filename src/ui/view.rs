@@ -1,8 +1,8 @@
-use gpui::{
+use gpui_kit::component::slider::{SliderEvent, SliderState};
+use gpui_kit::{
     Context, FocusHandle, IntoElement, MouseButton, Render, Subscription, Window, div,
     linear_color_stop, linear_gradient, prelude::*, px,
 };
-use gpui_component::slider::{SliderEvent, SliderState};
 use gpui_tetris::adapter::SocketAdapter;
 use gpui_tetris::audio::AudioEngine;
 use gpui_tetris::game::input::GameAction;
@@ -30,7 +30,7 @@ pub struct TetrisView {
     input: InputState,
     was_focused: bool,
     input_actions: Vec<InputAction>,
-    volume_slider: gpui::Entity<SliderState>,
+    volume_slider: gpui_kit::Entity<SliderState>,
     settings_slider_needs_sync: bool,
     _volume_subscription: Subscription,
 }
@@ -64,7 +64,9 @@ impl TetrisView {
         });
         let volume_subscription =
             cx.subscribe(&volume_slider, |view, _, event: &SliderEvent, cx| {
-                let SliderEvent::Change(value) = event;
+                let SliderEvent::Change(value) = event else {
+                    return;
+                };
                 view.ui.set_volume(value.end());
                 cx.notify();
             });
@@ -96,7 +98,7 @@ impl TetrisView {
 impl Render for TetrisView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.last_tick.is_none() {
-            self.focus_handle.focus(window);
+            self.focus_handle.focus(window, cx);
         }
         if self.settings_slider_needs_sync {
             self.sync_volume_slider(window, cx);
