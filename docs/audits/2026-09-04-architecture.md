@@ -47,5 +47,3 @@
 
 相关提交：`68364f4`（Kit 迁移）、`91c9797`（运行时与协议修复）、
 `cb0487f`（核心封装）、`24c849c`（依赖与安全检查）。
-审计收尾的 [质量 CI](https://github.com/lgn21st/gpui-tetris/actions/runs/33888238240)
-和 [在线依赖检查](https://github.com/lgn21st/gpui-tetris/actions/runs/33888238362) 均通过。

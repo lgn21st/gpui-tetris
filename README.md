@@ -4,9 +4,10 @@ Desktop Tetris for macOS, written in Rust with [GPUI Kit](https://github.com/lon
 modern scoring, SRS rotation, keyboard/controller input, resizable rendering,
 optional WAV effects, and a TCP adapter for AI clients.
 
-## Local Release
+## Local Build
 
-This is an internal project. Build the current working tree locally:
+This is a local research project with no publishing workflow. Build the current
+working tree locally with Cargo's optimized profile:
 
 ```bash
 cargo build --release

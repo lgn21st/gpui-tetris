@@ -15,7 +15,6 @@ live only in `rust-toolchain.toml`, `Cargo.toml`, and `Cargo.lock`.
 - `src/game/state/tests/`: internal rule fixtures and boundary tests.
 - `tests/`: public behavior and integration regression coverage.
 - `docs/`: maintained architecture, rules, protocol evidence, and operations.
-- `.github/`: CI and weekly dependency-update policy.
 
 Keep game logic independent of GPUI. Route input through `GameAction`; reuse
 core collision/SRS/scoring from Adapter planning. Bound queues, buffers, event
@@ -46,11 +45,10 @@ Use rustfmt defaults and behavior-based test names. Use imperative commit
 messages and keep commits focused. UI changes should include a visual check;
 Adapter TCP tests may require permission to bind loopback sockets.
 
-This is an internal project. Release means a local optimized build and app
-bundle using Cargo's native commands. Local builds may include uncommitted
-changes.
+This is a local research project with no publishing or hosted CI workflow.
+Local builds may include uncommitted changes.
 
-For release checks, run `cargo bundle --release`, launch the generated app
+For optimized local checks, run `cargo bundle --release`, launch the generated app
 outside the source tree, and verify icon, bundled SFX, input, and resizing.
 
 ## Adapter protocol

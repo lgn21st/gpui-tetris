@@ -27,9 +27,8 @@ For UI dependency changes, inspect the resolved macOS graphics/font graph with
 After dependency changes, run the gates in `AGENTS.md`, `cargo update
 --dry-run`, and `cargo audit --deny yanked`. This fetches the current
 RustSec database and checks registry withdrawal status. Known vulnerabilities and yanked versions fail the gate; unmaintained
-transitive crates remain visible warnings. The scheduled Dependency security
-workflow runs the same check weekly and on lockfile changes. Recheck command
-output for the current packages and versions.
+transitive crates remain visible warnings. Recheck command output locally for
+the current packages and versions.
 
 The maintenance warnings are owned by the upstream Kit/GPUI dependency graph.
 The current audit reports `instant`, `paste`, `rustls-pemfile`, `rustybuzz`, and
