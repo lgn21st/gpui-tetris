@@ -31,13 +31,11 @@ transitive crates remain visible warnings. The scheduled Dependency security
 workflow runs the same check weekly and on lockfile changes. Recheck command
 output for the current packages and versions.
 
-The maintenance warnings are owned by the upstream Kit/GPUI dependency graph:
-`bincode` comes through Base's syntax-highlighting stack, `instant` through
-Base/Component timing, and `paste` is a build-time macro used by Component and
-the graphics stack. `rustls-pemfile` comes through GPUI's HTTP client; the game
-does not initiate HTTP requests. `rustybuzz` and `ttf-parser` are in the SVG/font
-rendering stack. Reassess these paths on Kit upgrades rather than patching
-independent framework crates locally.
+The maintenance warnings are owned by the upstream Kit/GPUI dependency graph.
+The current audit reports `instant`, `paste`, `rustls-pemfile`, `rustybuzz`, and
+`ttf-parser`; it reports no known vulnerabilities or yanked packages. Reassess
+these warnings on Kit upgrades rather than patching independent framework
+crates locally.
 
 The default `desktop` feature enables Kit, controller support and `audio`.
 `cargo test --all-targets --no-default-features --offline` builds and tests
