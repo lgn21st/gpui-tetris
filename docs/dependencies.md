@@ -18,8 +18,12 @@ GPUI Component dependencies. The game board uses Kit's exported rendering
 primitives while deterministic rules remain independent of the UI framework.
 
 The macOS graphics/font graph uses upstream crates, including `core-graphics`
-and `zed-font-kit`. No local patches are required. Introduce a local patch
-only for a reproduced upstream incompatibility, with a removal condition.
+and `zed-font-kit`. The graph still resolves the legacy `block` 0.1 line, whose
+uninhabited Objective-C class declaration is rejected by Rust's future
+compatibility checks. `third_party/block` keeps the published API and replaces
+that declaration with an inhabited opaque type. Remove the patch when GPUI Kit
+no longer resolves `block` 0.1 or the upstream crate publishes the equivalent
+fix.
 
 For UI dependency changes, inspect the resolved macOS graphics/font graph with
 `cargo tree` and confirm that Kit still enables runtime shaders.

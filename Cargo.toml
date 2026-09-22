@@ -26,6 +26,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 semver = "1.0.28"
 
+[patch.crates-io]
+block = { path = "third_party/block" }
+
 [package.metadata.bundle]
 name = "gpui-tetris"
 identifier = "com.lyuguoning.gpui-tetris"
